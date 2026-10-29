@@ -23,6 +23,8 @@
     </dependency>
   </dependencies>
   <build>
+    <!-- The approved Eclipse project stores Java sources directly in src/. -->
+    <sourceDirectory>src</sourceDirectory>
     <plugins>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
