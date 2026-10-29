@@ -1,13 +1,17 @@
 # EnrollEase
 
-EnrollEase is an academic Java web application with an HTML/CSS/JavaScript frontend and a Java HTTP API.
+Academic web systems project. The application uses a Java HTTP backend with HTML, CSS, and JavaScript pages.
 
-## Online demonstration branch
+## Deployment branch status
 
-The deployment-ready project bundle and Render Docker configuration are maintained on the `deployment/neon-render` branch. The bundle preserves the existing project pages and assets while adding the minimum configuration required for Render and Neon PostgreSQL.
+The deployment changes have been prepared in a separate downloadable source bundle, but the application source has **not yet been committed to this branch** and no live deployment exists yet.
 
-- [Open the deployment branch](https://github.com/3l-franco/group1-websys/tree/deployment/neon-render)
-- The source bundle is named `EnrollEaseJava_Deployment.zip`.
-- The Render service should use the Docker runtime and the `deployment/neon-render` branch.
+Before deploying, extract the contents of the provided `EnrollEaseJava_Deployment.zip` so this repository root contains `Dockerfile`, `pom.xml`, `src/`, and `web/`. Preserve a copy of the approved original before replacing or moving files.
 
-Use fictional demo data only. Do not commit database credentials or real student records.
+## Intended online architecture
+
+- GitHub stores project source.
+- Render runs the Java application using Docker.
+- Neon hosts PostgreSQL for accounts, subjects, and submitted enrollment slips.
+
+Configure database credentials and the online administrator password through Render's environment settings. Never commit secrets, local database files, or real student data. Use fictional demonstration records only.
