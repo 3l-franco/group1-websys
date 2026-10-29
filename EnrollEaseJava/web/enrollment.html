@@ -22,10 +22,8 @@
 <div class="col-md-6"><div class="panel"><h6>Notice</h6><span id="noticeText">Loading...</span></div></div></div>
 <div id="subjectMessage"></div>
 <div class="panel mb-3"><div class="row g-2 align-items-end">
-<div class="col-md-3"><label class="form-label small mb-1" for="sortBy">Sort by</label><select id="sortBy" class="form-select form-select-sm"><option value="">Tree order (by code)</option><option value="code">Code</option><option value="title">Title</option><option value="units">Units</option><option value="schedule">Schedule</option></select></div>
-<div class="col-md-3"><label class="form-label small mb-1" for="sortAlgo">Algorithm</label><select id="sortAlgo" class="form-select form-select-sm"><option value="1">Bubble Sort</option><option value="2">Selection Sort</option><option value="3">Insertion Sort</option><option value="4" selected>Merge Sort</option></select></div>
-<div class="col-md-6"><label class="form-label small mb-1" for="searchCode">Search a subject by code</label><div class="input-group input-group-sm"><input id="searchCode" class="form-control" placeholder="e.g. IT 203"><button class="btn btn-outline-primary" id="searchBtn" type="button">Search</button></div></div></div>
-<div class="small text-secondary mt-2" id="sortInfo"></div><div class="mt-2" id="searchResult"></div></div>
+<div class="col-12"><label class="form-label small mb-1" for="searchCode">Search a subject by code</label><div class="input-group input-group-sm"><input id="searchCode" class="form-control" placeholder="e.g. IT 203"><button class="btn btn-outline-primary" id="searchBtn" type="button">Search</button></div></div></div>
+<div class="mt-2" id="searchResult"></div></div>
 <div class="table-responsive"><table class="table table-bordered align-middle bg-white"><thead><tr><th>Code</th><th>Subject</th><th>Units</th><th>Section</th><th>Schedule</th><th>Slots</th><th>Status</th><th>Select</th></tr></thead><tbody id="subjectRows"><tr><td colspan="8" class="text-center text-muted">Loading...</td></tr></tbody></table></div>
 <div class="panel mb-3"><h6>My weekly timetable</h6><div id="timetableBox" class="table-responsive"></div></div>
 <button class="btn btn-primary" id="submitEnroll" type="button">Submit enrollment</button>

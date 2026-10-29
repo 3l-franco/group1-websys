@@ -317,12 +317,11 @@ $(function () {
     var loadSubjects, loadSelected, loadQueue, loadSlips, pollTimer = null;
 
     loadSubjects = function () {
-      call("GET", "api/subjects", { sort: $("#sortBy").val(), algo: $("#sortAlgo").val() }).then(function (r) {
+      call("GET", "api/subjects").then(function (r) {
         if (r.auth === false) { window.location.href = "login.html"; return; }
         $("#termLine").text(r.term);
         $("#maxUnits").text(r.maxUnits); $("#selectedUnits").text(r.units);
         $("#noticeText").html(r.notice ? esc(r.notice) : "No failed subjects. Everything is open to you.");
-        $("#sortInfo").text(r.algorithm ? r.algorithm + " used " + r.comparisons + " comparisons." : "Shown in order of code (read from the Binary Search Tree).");
         var html = "";
         r.subjects.forEach(function (s) {
           var picked = s.status === "Selected", blocked = (s.status !== "Available" && !picked) || r.submitted;
@@ -383,7 +382,6 @@ $(function () {
         loadSubjects(); loadSelected();
       });
     });
-    $("#sortBy, #sortAlgo").on("change", loadSubjects);
     $("#searchBtn").on("click", function () {
       call("GET", "api/subjects/search", { code: $("#searchCode").val() }).then(function (r) {
         if (!r.ok) { $("#searchResult").html('<div class="alert alert-warning mb-0">' + esc(r.message) + "</div>"); return; }
