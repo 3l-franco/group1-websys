@@ -221,7 +221,7 @@ public class Api {
         if (Validator.isBlank(param(p, "message"))) bad.add("cMessage");
         if (!param(p, "agree").equals("true")) bad.add("cAgree");
         if (bad.isEmpty()) {
-            return ok("message", "Your message has been submitted successfully.");
+            return ok("message", "This demo validates the message only; it does not save or send messages.");
         }
         Map<String, Object> result = fail("Please fix the highlighted fields.");
         result.put("fields", bad);
@@ -233,7 +233,15 @@ public class Api {
         List<Object> list = new ArrayList<Object>();
         for (SiteContent.ServiceItem item : SiteContent.getServices()) {
             if (category.isEmpty() || category.equals("all") || category.equals(item.getCategory())) {
-                list.add(Json.map("title", item.getTitle(), "description", item.getDescription(),
+                String description = item.getDescription();
+                // Keep the public demo descriptions aligned with the features that are implemented.
+                if (item.getTitle().equals("Credential Upload")) description = "Credential uploads are not available in this academic demo.";
+                else if (item.getTitle().equals("Credential Verification")) description = "Staff document review and approval are not implemented in this demo.";
+                else if (item.getTitle().equals("Schedule Checking")) description = "View sample schedules. Conflicting subjects are flagged before submission.";
+                else if (item.getTitle().equals("Prerequisite Locking")) description = "The demo illustrates prerequisite locking using the seeded failed-subject example.";
+                else if (item.getTitle().equals("Subject and Section Management")) description = "The admin page manages student and staff accounts. Subject and section editing is not included in this demo.";
+                else if (item.getTitle().equals("Payment Queue Number")) description = "Submitting enrollment saves a slip and generates a demo queue number. Email alerts and online payment are not included.";
+                list.add(Json.map("title", item.getTitle(), "description", description,
                                   "category", item.getCategory()));
             }
         }

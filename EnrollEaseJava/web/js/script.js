@@ -16,7 +16,7 @@ $(function () {
     var d = $.Deferred();
     $.ajax({ url: url, method: method, data: data, dataType: "json" })
       .done(function (r) { d.resolve(r); })
-      .fail(function (x) { d.resolve(x.responseJSON || { ok: false, message: "Cannot reach the Java server. Run WebApp.java in Eclipse and open http://localhost:8080 (do not open the .html file directly)." }); });
+      .fail(function (x) { d.resolve(x.responseJSON || { ok: false, message: "The server is temporarily unavailable. Please refresh the page and try again." }); });
     return d.promise();
   };
 
@@ -25,7 +25,7 @@ $(function () {
   $("#backToTop").on("click", function () { $("html, body").animate({ scrollTop: 0 }, 400); });
 
   // Home: carousel auto-slides every 2 seconds
-  $("#heroCarousel").each(function () { new bootstrap.Carousel(this, { interval: 2000, ride: "carousel" }); });
+  $("#heroCarousel").each(function () { new bootstrap.Carousel(this, { interval: 5000, ride: "carousel" }); });
 
   var logout = function (e) {
     e.preventDefault();
@@ -40,6 +40,14 @@ $(function () {
     var f = $("#password"), hidden = f.attr("type") === "password";
     f.attr("type", hidden ? "text" : "password"); $(this).text(hidden ? "Hide" : "Show");
   });
+  // Remember only the ID/username on this browser; never save the password.
+  var rememberedId = "";
+  try { rememberedId = localStorage.getItem("enrolleaseRememberId") || ""; } catch (e) { }
+  if ($("#loginForm").length && rememberedId) {
+    $("#userId").val(rememberedId);
+    $("#remember").prop("checked", true);
+  }
+
   $("#loginForm").on("submit", function (e) {
     e.preventDefault();
     $("#userId, #password").removeClass("is-invalid");
@@ -51,6 +59,10 @@ $(function () {
     }
     call("POST", "api/login", { id: id, password: pass }).then(function (r) {
       if (!r.ok) { $("#loginAlert").text(r.message).removeClass("d-none"); return; }
+      try {
+        if ($("#remember").is(":checked")) localStorage.setItem("enrolleaseRememberId", id);
+        else localStorage.removeItem("enrolleaseRememberId");
+      } catch (e) { }
       window.location.href = r.role === "admin" ? "admin.html" : "enrollment.html";
     });
   });
@@ -68,14 +80,15 @@ $(function () {
   $("#contactForm").on("submit", function (e) {
     e.preventDefault();
     var form = this;
+    $("#contactAlert, #contactError").addClass("d-none");
     $("#cName, #cEmail, #cTopic, #cMessage, #cAgree").removeClass("is-invalid");
     call("POST", "api/contact", {
       name: $("#cName").val(), email: $("#cEmail").val(), topic: $("#cTopic").val(),
       message: $("#cMessage").val(), agree: $("#cAgree").is(":checked"),
       type: $("#contStudent").is(":checked") ? "Continuing student" : "New student"
     }).then(function (r) {
-      if (r.ok) { $("#contactAlert").removeClass("d-none"); form.reset(); return; }
-      $("#contactAlert").addClass("d-none");
+      if (r.ok) { $("#contactAlert").removeClass("d-none").text(r.message || "This demo validates the message only; it does not save or send messages."); form.reset(); return; }
+      $("#contactError").removeClass("d-none").text(r.message || "Please fix the highlighted fields.");
       (r.fields || []).forEach(function (id) { $("#" + id).addClass("is-invalid"); });
     });
   });
@@ -140,14 +153,21 @@ $(function () {
   // ---------- pages that need a logged-in user ----------
   call("GET", "api/me").then(function (me) {
     if (me.loggedIn) {
+      if (me.role === "admin") {
+        var $adminLink = $('.navbar .navbar-nav a.nav-link[href="enrollment.html"]');
+        if ($adminLink.length) {
+          $adminLink.text("Admin Maintenance").attr("href", "admin.html");
+          if ($("#adminPage").length) $adminLink.addClass("active");
+        }
+      }
       $('a.nav-link[href="login.html"]').text("Logout (" + me.name + ")").attr("href", "#").on("click", logout);
     }
     if ($("#adminPage").length) {
-      if (me.role !== "admin") { window.location.href = "login.html"; return; }
+      if (me.role !== "admin") { window.location.href = me.role === "student" ? "enrollment.html" : "login.html"; return; }
       startAdmin();
     }
     if ($("#submitEnroll").length) {
-      if (me.role !== "student") { window.location.href = "login.html"; return; }
+      if (me.role !== "student") { window.location.href = me.role === "admin" ? "admin.html" : "login.html"; return; }
       startEnrollment();
     }
   });
@@ -237,7 +257,7 @@ $(function () {
           var picked = s.status === "Selected", blocked = (s.status !== "Available" && !picked) || r.submitted;
           var badge = (s.status === "Available" || picked) ? "success" : "danger";
           html += "<tr><td>" + esc(s.code) + "</td><td>" + esc(s.title) + "</td><td>" + s.units + "</td><td>" + esc(s.section) + "</td><td>" + esc(s.schedule) + "</td><td>" + s.slots +
-            '</td><td><span class="badge text-bg-' + badge + '">' + esc(s.status) + '</span></td><td><input class="form-check-input subj" type="checkbox" data-code="' + esc(s.code) + '"' +
+            '</td><td><span class="badge text-bg-' + badge + '">' + esc(s.status) + '</span></td><td><input class="form-check-input subj" type="checkbox" aria-label="Select ' + esc(s.code) + ' ' + esc(s.title) + '" data-code="' + esc(s.code) + '"' +
             (picked ? " checked" : "") + (blocked ? " disabled" : "") + "></td></tr>";
         });
         $("#subjectRows").html(html);

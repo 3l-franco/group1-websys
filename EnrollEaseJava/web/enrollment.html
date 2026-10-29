@@ -28,14 +28,14 @@
 <div class="small text-secondary mt-2" id="sortInfo"></div><div class="mt-2" id="searchResult"></div></div>
 <div class="table-responsive"><table class="table table-bordered align-middle bg-white"><thead><tr><th>Code</th><th>Subject</th><th>Units</th><th>Section</th><th>Schedule</th><th>Slots</th><th>Status</th><th>Select</th></tr></thead><tbody id="subjectRows"><tr><td colspan="8" class="text-center text-muted">Loading...</td></tr></tbody></table></div>
 <div class="panel mb-3"><h6>My weekly timetable</h6><div id="timetableBox" class="table-responsive"></div></div>
-<button class="btn btn-primary" id="submitEnroll" type="button">Submit for approval</button>
-<h2 class="section-title mt-5">2. Payment Queue</h2><p class="text-secondary">After your enrollment is approved, you get a queue number for the cashier.</p>
+<button class="btn btn-primary" id="submitEnroll" type="button">Submit enrollment</button>
+<h2 class="section-title mt-5">2. Payment Queue</h2><p class="text-secondary">After you submit your enrollment, a queue number is generated for the cashier.</p>
 <div id="paymentLocked" class="alert alert-secondary">Submit a valid enrollment first to access the payment queue.</div>
 <div id="paymentContent" class="d-none"><div class="row g-3"><div class="col-md-6"><div class="queue-card"><span>Your queue number</span><h3>No. <span id="queueNumber">-</span></h3><p class="mb-0">Numbers ahead of you: <strong id="numbersAhead">-</strong></p></div></div>
 <div class="col-md-6"><div class="queue-card"><span>Now serving</span><h3>No. <span id="currentNumber">-</span></h3><span class="badge text-bg-warning" id="turnStatus">Payment queue</span></div></div></div>
 <div class="alert alert-info mt-3" id="queueMessage"></div>
 <button class="btn btn-outline-primary" id="nextNumber" type="button">Demo: Call next number</button> <button class="btn btn-outline-secondary" id="startCashier" type="button">Start cashier simulation (thread)</button></div>
-<h2 class="section-title mt-5">3. My saved enrollment slips</h2><p class="text-secondary">Saved on the server with Java serialization (slips.ser).</p><div id="slipList"></div></main>
+<h2 class="section-title mt-5">3. My saved enrollment slips</h2><p class="text-secondary">Saved in the application database.</p><div id="slipList"></div></main>
 <footer>
 <div class="container">
 <div class="row">
