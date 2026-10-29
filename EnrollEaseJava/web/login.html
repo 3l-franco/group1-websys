@@ -19,13 +19,13 @@
 <main class="container login-container"><div class="login-card"><div class="text-center mb-3"><img src="img/logo.png" alt="EnrollEase logo" class="login-logo"></div><ul class="nav nav-tabs nav-fill mb-4">
 <li class="nav-item"><button class="nav-link active" id="loginTabBtn" data-bs-toggle="tab" data-bs-target="#loginTab" type="button">Log in</button></li>
 <li class="nav-item"><button class="nav-link" id="registerTabBtn" data-bs-toggle="tab" data-bs-target="#registerTab" type="button">Register</button></li></ul>
-<div class="tab-content"><div class="tab-pane fade show active" id="loginTab"><h1 class="mb-3">Log in</h1><div id="loginAlert" class="alert alert-danger d-none"></div>
+<div class="tab-content"><div class="tab-pane fade show active" id="loginTab"><h1 class="mb-3">Log in</h1><div id="loginAlert" class="alert alert-danger d-none" role="alert" aria-live="polite"></div>
 <form id="loginForm" novalidate><div class="mb-3"><label class="form-label" for="userId">Student ID / Username</label><input type="text" class="form-control" id="userId" placeholder="e.g. 2026-00123 or admin"></div>
 <div class="mb-3"><label class="form-label" for="password">Password</label><div class="input-group"><input type="password" class="form-control" id="password" placeholder="Password"><button class="btn btn-outline-secondary" type="button" id="togglePass">Show</button></div></div>
-<div class="form-check mb-3"><input class="form-check-input" type="checkbox" id="remember"><label class="form-check-label" for="remember">Remember me</label></div>
+<div class="form-check mb-3"><input class="form-check-input" type="checkbox" id="remember"><label class="form-check-label" for="remember">Remember my ID/username on this device</label></div>
 <button type="submit" class="btn btn-primary w-100">Log in</button></form>
 <div class="demo-account mt-3">Demo account: ID <strong>2026-00123</strong> / Password <strong>demo123</strong></div><p class="mt-3 mb-0 small">No account yet? <a href="#" id="goRegister">Register</a></p></div>
-<div class="tab-pane fade" id="registerTab"><h1 class="mb-3">Create account</h1><div id="regAlert" class="alert d-none"></div>
+<div class="tab-pane fade" id="registerTab"><h1 class="mb-3">Create account</h1><div id="regAlert" class="alert d-none" role="status" aria-live="polite"></div>
 <form id="registerForm" novalidate><div class="mb-3"><label class="form-label" for="fullName">Full name</label><input type="text" class="form-control" id="fullName" placeholder="Last name, First name M."></div>
 <div class="mb-3"><label class="form-label" for="email">Email</label><input type="email" class="form-control" id="email" placeholder="name@email.com"></div>
 <div class="mb-3"><label class="form-label" for="studentType">Student type</label><select class="form-select" id="studentType"><option>New Student</option><option>Continuing Student</option><option>Transferee</option></select></div>
