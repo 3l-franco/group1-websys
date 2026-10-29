@@ -237,6 +237,77 @@ $(function () {
         modal.hide(); flash(r.message, false); load();
       });
     });
+    // Administrative enrollment and credential review use the same Java API and database.
+    var enrollmentStatuses = ["Pending Review", "Requirements Incomplete", "Approved", "Rejected"];
+    var credentialStatuses = ["Pending Review", "Verified", "Needs Resubmission", "Rejected"];
+    var statusOptions = function (items, selected) {
+      return items.map(function (value) { return '<option' + (value === selected ? ' selected' : '') + '>' + esc(value) + '</option>'; }).join("");
+    };
+    var loadEnrollments = function () {
+      if (!$("#enrollmentRecords").length) return;
+      call("GET", "api/admin/enrollments").then(function (r) {
+        if (!r.records) { $("#enrollmentRecords").html('<div class="alert alert-warning">' + esc(r.message || "Enrollment records could not be loaded.") + '</div>'); return; }
+        if (!r.records.length) { $("#enrollmentRecords").html('<p class="text-muted">No enrollment transactions have been submitted yet.</p>'); return; }
+        var html = '<table class="table table-bordered align-middle bg-white"><thead><tr><th>Student</th><th>Submitted</th><th>Selected subjects</th><th>Units</th><th>Queue</th><th>Status</th><th>Registrar remarks</th></tr></thead><tbody>';
+        r.records.forEach(function (record) {
+          var subjects = (record.subjects || []).map(function (sub) {
+            return '<div class="mb-1"><strong>' + esc(sub.code) + '</strong> ' + esc(sub.title) + '<div class="small text-secondary">' + esc(sub.section) + ' · ' + esc(sub.schedule) + ' · ' + sub.units + ' units</div></div>';
+          }).join("");
+          html += '<tr><td><strong>' + esc(record.studentName) + '</strong><div class="small text-secondary">' + esc(record.studentId) + '</div></td>' +
+            '<td>' + esc(record.submittedAt) + '</td><td>' + (subjects || 'No subjects listed') + '</td><td>' + record.totalUnits + '</td><td>' + record.queueNumber + '</td>' +
+            '<td><select class="form-select form-select-sm" data-enrollment-status="' + esc(record.id) + '">' + statusOptions(enrollmentStatuses, record.status) + '</select></td>' +
+            '<td style="min-width:220px"><input class="form-control form-control-sm mb-2" maxlength="1000" placeholder="Optional remarks" data-enrollment-note="' + esc(record.id) + '" value="' + esc(record.adminNotes) + '"><button type="button" class="btn btn-sm btn-primary" data-save-enrollment="' + esc(record.id) + '">Save review</button></td></tr>';
+        });
+        $("#enrollmentRecords").html(html + '</tbody></table>');
+      });
+    };
+    var loadCredentials = function () {
+      if (!$("#credentialRecords").length) return;
+      call("GET", "api/admin/credentials").then(function (r) {
+        if (!r.credentials) { $("#credentialRecords").html('<div class="alert alert-warning">' + esc(r.message || "Credentials could not be loaded.") + '</div>'); return; }
+        if (!r.credentials.length) { $("#credentialRecords").html('<p class="text-muted">No student requirements have been submitted yet.</p>'); return; }
+        var html = '<table class="table table-bordered align-middle bg-white"><thead><tr><th>Student</th><th>Requirement</th><th>Document</th><th>Submitted</th><th>Review status</th><th>Remarks</th></tr></thead><tbody>';
+        r.credentials.forEach(function (credential) {
+          html += '<tr><td><strong>' + esc(credential.studentName) + '</strong><div class="small text-secondary">' + esc(credential.studentId) + '</div></td>' +
+            '<td>' + esc(credential.type) + '</td><td><button type="button" class="btn btn-sm btn-outline-primary" data-view-credential="' + esc(credential.id) + '">View document</button><div class="small text-secondary mt-1">' + esc(credential.fileName) + '</div></td>' +
+            '<td>' + esc(credential.submittedAt) + '</td><td><select class="form-select form-select-sm" data-credential-status="' + esc(credential.id) + '">' + statusOptions(credentialStatuses, credential.status) + '</select></td>' +
+            '<td style="min-width:220px"><input class="form-control form-control-sm mb-2" maxlength="1000" placeholder="Optional remarks" data-credential-note="' + esc(credential.id) + '" value="' + esc(credential.adminNotes) + '"><button type="button" class="btn btn-sm btn-primary" data-save-credential="' + esc(credential.id) + '">Save review</button></td></tr>';
+        });
+        $("#credentialRecords").html(html + '</tbody></table>');
+      });
+    };
+    $(document).on("click", "[data-save-enrollment]", function () {
+      var id = $(this).attr("data-save-enrollment"), $button = $(this);
+      $button.prop("disabled", true);
+      call("POST", "api/admin/enrollment/review", { id: id, status: $('[data-enrollment-status="' + id + '"]').val(), notes: $('[data-enrollment-note="' + id + '"]').val() })
+        .then(function (r) { flash(r.message, !r.ok); loadEnrollments(); })
+        .always(function () { $button.prop("disabled", false); });
+    });
+    $(document).on("click", "[data-save-credential]", function () {
+      var id = $(this).attr("data-save-credential"), $button = $(this);
+      $button.prop("disabled", true);
+      call("POST", "api/admin/credentials/review", { id: id, status: $('[data-credential-status="' + id + '"]').val(), notes: $('[data-credential-note="' + id + '"]').val() })
+        .then(function (r) { flash(r.message, !r.ok); loadCredentials(); })
+        .always(function () { $button.prop("disabled", false); });
+    });
+    $(document).on("click", "[data-view-credential]", function () {
+      var id = $(this).attr("data-view-credential");
+      var preview = window.open("about:blank", "_blank");
+      if (!preview) { flash("Allow pop-ups to open a submitted document.", true); return; }
+      preview.document.write("<title>Loading document</title><p style='font-family:Arial;padding:2rem'>Loading submitted document...</p>");
+      call("GET", "api/admin/credentials/file", { id: id }).then(function (r) {
+        if (!r.ok) { preview.close(); flash(r.message || "Document could not be opened.", true); return; }
+        try {
+          var bytes = atob(r.data), nums = new Uint8Array(bytes.length);
+          for (var i = 0; i < bytes.length; i++) nums[i] = bytes.charCodeAt(i);
+          var url = URL.createObjectURL(new Blob([nums], { type: r.contentType }));
+          preview.location.href = url;
+          setTimeout(function () { URL.revokeObjectURL(url); }, 60000);
+        } catch (err) { preview.close(); flash("This document could not be previewed in the browser.", true); }
+      });
+    });
+    loadEnrollments(); loadCredentials();
+
     load();
   }
 
@@ -295,7 +366,9 @@ $(function () {
         if (!r.slips || !r.slips.length) { $("#slipList").html('<span class="text-muted">No saved enrollment slip yet.</span>'); return; }
         var html = "";
         r.slips.forEach(function (s) {
-          html += '<div class="panel mb-3"><strong>Submitted ' + esc(s.submittedAt) + "</strong> &middot; Queue No. " + s.queueNumber + " &middot; " + s.totalUnits + " units<ul class=\"mb-0 mt-2\">";
+          html += '<div class="panel mb-3"><strong>Submitted ' + esc(s.submittedAt) + "</strong> &middot; Queue No. " + s.queueNumber + " &middot; " + s.totalUnits + " units" +
+            ' <span class="badge text-bg-' + (s.status === "Approved" ? "success" : (s.status === "Rejected" || s.status === "Requirements Incomplete" ? "warning" : "secondary")) + '">' + esc(s.status || "Pending Review") + '</span>' +
+            (s.adminNotes ? '<p class="small text-secondary mt-2 mb-0">Registrar remarks: ' + esc(s.adminNotes) + '</p>' : '') + '<ul class="mb-0 mt-2">';
           s.subjects.forEach(function (x) { html += "<li>" + esc(x.code) + " " + esc(x.title) + " (" + x.units + " units, " + esc(x.schedule) + ")</li>"; });
           html += "</ul></div>";
         });
@@ -328,6 +401,41 @@ $(function () {
     $("#nextNumber").on("click", function () { call("POST", "api/queue/next").then(loadQueue); });
     $("#startCashier").on("click", function () { call("POST", "api/queue/cashier").then(loadQueue); });
 
-    loadSubjects(); loadSelected(); loadQueue(); loadSlips();
+    var loadStudentCredentials = function () {
+      if (!$("#studentCredentials").length) return;
+      call("GET", "api/credentials").then(function (r) {
+        if (!r.credentials) { $("#studentCredentials").html('<div class="alert alert-warning">' + esc(r.message || "Requirements could not be loaded.") + '</div>'); return; }
+        if (!r.credentials.length) { $("#studentCredentials").html('<p class="text-muted">No requirements submitted yet.</p>'); return; }
+        var html = '<div class="table-responsive"><table class="table table-bordered align-middle bg-white"><thead><tr><th>Requirement</th><th>File</th><th>Submitted</th><th>Status</th><th>Registrar remarks</th></tr></thead><tbody>';
+        r.credentials.forEach(function (doc) {
+          var badge = doc.status === "Verified" ? "success" : (doc.status === "Rejected" || doc.status === "Needs Resubmission" ? "warning" : "secondary");
+          html += '<tr><td>' + esc(doc.type) + '</td><td>' + esc(doc.fileName) + '</td><td>' + esc(doc.submittedAt) + '</td><td><span class="badge text-bg-' + badge + '">' + esc(doc.status) + '</span></td><td>' + esc(doc.adminNotes || "No remarks") + '</td></tr>';
+        });
+        $("#studentCredentials").html(html + '</tbody></table></div>');
+      });
+    };
+    $("#uploadCredential").on("click", function () {
+      var fileInput = $("#credentialFile")[0], file = fileInput && fileInput.files ? fileInput.files[0] : null;
+      var type = $("#credentialType").val();
+      $("#credentialMessage").empty();
+      if (!file) { $("#credentialMessage").html('<div class="alert alert-warning">Choose a document first.</div>'); return; }
+      if (file.size > 2 * 1024 * 1024) { $("#credentialMessage").html('<div class="alert alert-warning">The document must be 2 MB or smaller.</div>'); return; }
+      var allowed = ["application/pdf", "image/png", "image/jpeg"];
+      if (allowed.indexOf(file.type) < 0) { $("#credentialMessage").html('<div class="alert alert-warning">Choose a PDF, PNG, or JPG/JPEG file.</div>'); return; }
+      var reader = new FileReader(), $button = $(this);
+      $button.prop("disabled", true).text("Submitting...");
+      reader.onload = function () {
+        var result = String(reader.result || ""), comma = result.indexOf(",");
+        if (comma < 0) { $("#credentialMessage").html('<div class="alert alert-danger">The document could not be read.</div>'); $button.prop("disabled", false).text("Submit requirement"); return; }
+        call("POST", "api/credentials/upload", { type: type, fileName: file.name, contentType: file.type, data: result.substring(comma + 1) }).then(function (r) {
+          $("#credentialMessage").html('<div class="alert alert-' + (r.ok ? "success" : "danger") + '">' + esc(r.message) + '</div>');
+          if (r.ok) { fileInput.value = ""; loadStudentCredentials(); }
+        }).always(function () { $button.prop("disabled", false).text("Submit requirement"); });
+      };
+      reader.onerror = function () { $("#credentialMessage").html('<div class="alert alert-danger">The document could not be read.</div>'); $button.prop("disabled", false).text("Submit requirement"); };
+      reader.readAsDataURL(file);
+    });
+
+    loadSubjects(); loadSelected(); loadQueue(); loadSlips(); loadStudentCredentials();
   }
 });

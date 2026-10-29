@@ -12,6 +12,7 @@ import java.time.YearMonth;
 import java.time.format.TextStyle;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Base64;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -24,6 +25,7 @@ import com.sun.net.httpserver.HttpExchange;
 
 import enrollease.db.AccountDAO;
 import enrollease.db.DatabaseManager;
+import enrollease.db.CredentialDAO;
 import enrollease.db.EnrollmentDAO;
 import enrollease.ds.MyStack;
 import enrollease.model.Admin;
@@ -53,6 +55,7 @@ public class Api {
     private Catalog catalog = new Catalog();
     private QueueManager queueManager = new QueueManager();
     private EnrollmentDAO enrollmentDao = new EnrollmentDAO();
+    private CredentialDAO credentialDao = new CredentialDAO();
     private MyStack<Person> deletedStack = new MyStack<Person>();      // for "Undo last delete"
     private Map<String, Session> sessions = new HashMap<String, Session>();
 
@@ -79,7 +82,7 @@ public class Api {
     private static final List<String> STUDENT_KEYS = Arrays.asList(
         "GET /api/subjects", "GET /api/subjects/search", "POST /api/select", "POST /api/remove",
         "GET /api/selected", "POST /api/submit", "GET /api/queue", "POST /api/queue/next",
-        "POST /api/queue/cashier", "GET /api/slips");
+        "POST /api/queue/cashier", "GET /api/slips", "GET /api/credentials", "POST /api/credentials/upload");
 
     // =====================================================================
     //  Entry point: called by WebApp for every /api/... request
@@ -288,6 +291,8 @@ public class Api {
             case "GET /api/queue": return queue(s);
             case "POST /api/queue/next": s.callNext(); return queue(s);
             case "POST /api/queue/cashier": s.startCashier(); return queue(s);
+            case "GET /api/credentials": return studentCredentials(s);
+            case "POST /api/credentials/upload": return uploadCredential(s, p);
             default: return slips(s);
         }
     }
@@ -403,7 +408,8 @@ public class Api {
                                   "schedule", sub.getSchedule().toString()));
             }
             list.add(Json.map("submittedAt", slip.getSubmittedAt(), "queueNumber", slip.getQueueNumber(),
-                              "totalUnits", slip.getTotalUnits(), "subjects", subs));
+                              "totalUnits", slip.getTotalUnits(), "status", slip.getStatus(),
+                              "adminNotes", slip.getAdminNotes(), "subjects", subs));
         }
         return ok("slips", list);
     }
@@ -420,11 +426,90 @@ public class Api {
             case "POST /api/admin/update": return adminSave(p, students, param(p, "oldId"));
             case "POST /api/admin/delete": return adminDelete(p, students);
             case "POST /api/admin/undo": return adminUndo();
+            case "GET /api/admin/enrollments": return adminEnrollments();
+            case "POST /api/admin/enrollment/review": return updateEnrollmentReview(p);
+            case "GET /api/admin/credentials": return adminCredentials();
+            case "GET /api/admin/credentials/file": return credentialFile(p);
+            case "POST /api/admin/credentials/review": return reviewCredential(p);
             default:
                 Map<String, Object> notFound = fail("Unknown address: " + key);
                 notFound.put("_status", 404);
                 return notFound;
         }
+    }
+
+    private Map<String, Object> adminEnrollments() {
+        return ok("records", enrollmentDao.getAllForAdmin());
+    }
+
+    private Map<String, Object> updateEnrollmentReview(Map<String, String> p) {
+        String id = param(p, "id").trim();
+        String status = param(p, "status").trim();
+        String notes = param(p, "notes").trim();
+        if (id.isEmpty()) return fail("Enrollment record ID is required.");
+        if (!Arrays.asList("Pending Review", "Requirements Incomplete", "Approved", "Rejected").contains(status)) {
+            return fail("Choose a valid enrollment status.");
+        }
+        if (notes.length() > 1000) return fail("Remarks must be 1,000 characters or fewer.");
+        if (!enrollmentDao.updateReview(id, status, notes)) return fail("Could not update the enrollment record.");
+        return ok("message", "Enrollment status updated to " + status + ".");
+    }
+
+    private Map<String, Object> studentCredentials(StudentSession session) {
+        return ok("credentials", credentialDao.getByStudent(session.getStudent().getId()));
+    }
+
+    private Map<String, Object> uploadCredential(StudentSession session, Map<String, String> p) {
+        String type = param(p, "type").trim();
+        String fileName = param(p, "fileName").trim();
+        String contentType = param(p, "contentType").trim().toLowerCase(Locale.ENGLISH);
+        String data = param(p, "data").trim();
+        if (!Arrays.asList("School ID", "Report Card", "Transcript", "Other").contains(type)) {
+            return fail("Choose a valid credential type.");
+        }
+        if (fileName.isEmpty() || data.isEmpty()) return fail("Choose a document to upload.");
+        fileName = fileName.replace('\\', '/');
+        if (fileName.contains("/")) fileName = fileName.substring(fileName.lastIndexOf('/') + 1);
+        if (fileName.length() > 160) fileName = fileName.substring(fileName.length() - 160);
+        boolean supported = "application/pdf".equals(contentType) || "image/png".equals(contentType)
+                || "image/jpeg".equals(contentType);
+        if (!supported) return fail("Only PDF, PNG, and JPG/JPEG files are supported.");
+        byte[] decoded;
+        try {
+            decoded = Base64.getDecoder().decode(data);
+        } catch (IllegalArgumentException e) {
+            return fail("The selected document could not be read. Please choose it again.");
+        }
+        if (decoded.length == 0) return fail("The selected document is empty.");
+        if (decoded.length > 2 * 1024 * 1024) return fail("The document must be 2 MB or smaller.");
+        if (!credentialDao.add(session.getStudent().getId(), session.getStudent().getName(), type,
+                fileName, contentType, data)) {
+            return fail("Could not save the document. Please try again.");
+        }
+        return ok("message", "Credential submitted for registrar review.");
+    }
+
+    private Map<String, Object> adminCredentials() {
+        return ok("credentials", credentialDao.getAllForAdmin());
+    }
+
+    private Map<String, Object> credentialFile(Map<String, String> p) {
+        String id = param(p, "id").trim();
+        if (id.isEmpty()) return fail("Credential ID is required.");
+        return credentialDao.getFile(id);
+    }
+
+    private Map<String, Object> reviewCredential(Map<String, String> p) {
+        String id = param(p, "id").trim();
+        String status = param(p, "status").trim();
+        String notes = param(p, "notes").trim();
+        if (id.isEmpty()) return fail("Credential ID is required.");
+        if (!Arrays.asList("Pending Review", "Verified", "Needs Resubmission", "Rejected").contains(status)) {
+            return fail("Choose a valid credential status.");
+        }
+        if (notes.length() > 1000) return fail("Remarks must be 1,000 characters or fewer.");
+        if (!credentialDao.review(id, status, notes)) return fail("Could not update the credential review.");
+        return ok("message", "Credential review updated to " + status + ".");
     }
 
     private Map<String, Object> adminAccounts(Map<String, String> p, boolean students) {

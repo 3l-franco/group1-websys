@@ -18,14 +18,23 @@ public class EnrollmentSlip implements Serializable {
     private int totalUnits;
     private int queueNumber;
     private String submittedAt;
+    private String status = "Pending Review";
+    private String adminNotes = "";
 
     public EnrollmentSlip(String studentId, String studentName, ArrayList<Subject> subjects,
                           int queueNumber, String submittedAt) {
+        this(studentId, studentName, subjects, queueNumber, submittedAt, "Pending Review", "");
+    }
+
+    public EnrollmentSlip(String studentId, String studentName, ArrayList<Subject> subjects,
+                          int queueNumber, String submittedAt, String status, String adminNotes) {
         this.studentId = studentId;
         this.studentName = studentName;
         this.subjects = subjects;
         this.queueNumber = queueNumber;
         this.submittedAt = submittedAt;
+        this.status = (status == null || status.isEmpty()) ? "Pending Review" : status;
+        this.adminNotes = adminNotes == null ? "" : adminNotes;
         for (Subject s : subjects) {
             totalUnits += s.getUnits();
         }
@@ -37,4 +46,6 @@ public class EnrollmentSlip implements Serializable {
     public int getTotalUnits() { return totalUnits; }
     public int getQueueNumber() { return queueNumber; }
     public String getSubmittedAt() { return submittedAt; }
+    public String getStatus() { return status; }
+    public String getAdminNotes() { return adminNotes; }
 }

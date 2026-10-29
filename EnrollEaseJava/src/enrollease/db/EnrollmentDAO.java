@@ -5,6 +5,8 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.UUID;
 
 import enrollease.model.EnrollmentSlip;
@@ -70,7 +72,7 @@ public class EnrollmentDAO {
     /** Loads a student's saved slips in creation order. */
     public ArrayList<EnrollmentSlip> getByStudentId(String studentId) {
         ArrayList<EnrollmentSlip> slips = new ArrayList<EnrollmentSlip>();
-        String sql = "SELECT id, student_id, student_name, queue_number, submitted_at "
+        String sql = "SELECT id, student_id, student_name, queue_number, submitted_at, status, admin_notes "
                    + "FROM enrollment_slips WHERE student_id=? ORDER BY created_at, id";
         try (PreparedStatement ps = DatabaseManager.getConnection().prepareStatement(sql)) {
             ps.setString(1, studentId);
@@ -78,7 +80,7 @@ public class EnrollmentDAO {
                 while (rs.next()) {
                     slips.add(loadSlip(rs.getString("id"), rs.getString("student_id"),
                             rs.getString("student_name"), rs.getInt("queue_number"),
-                            rs.getString("submitted_at")));
+                            rs.getString("submitted_at"), rs.getString("status"), rs.getString("admin_notes")));
                 }
             }
         } catch (SQLException e) {
@@ -88,7 +90,7 @@ public class EnrollmentDAO {
     }
 
     private EnrollmentSlip loadSlip(String slipId, String studentId, String studentName,
-                                    int queueNumber, String submittedAt) throws SQLException {
+                                    int queueNumber, String submittedAt, String status, String adminNotes) throws SQLException {
         ArrayList<Subject> subjects = new ArrayList<Subject>();
         String sql = "SELECT subject_code, title, units, section, day, start_min, end_min, slots "
                    + "FROM enrollment_slip_subjects WHERE slip_id=? ORDER BY subject_index";
@@ -103,6 +105,71 @@ public class EnrollmentDAO {
                 }
             }
         }
-        return new EnrollmentSlip(studentId, studentName, subjects, queueNumber, submittedAt);
+        return new EnrollmentSlip(studentId, studentName, subjects, queueNumber, submittedAt, status, adminNotes);
+    }
+
+    /** Loads all submitted enrollments for the registrar/admin dashboard. */
+    public synchronized ArrayList<Map<String, Object>> getAllForAdmin() {
+        ArrayList<Map<String, Object>> records = new ArrayList<Map<String, Object>>();
+        String sql = "SELECT id, student_id, student_name, total_units, queue_number, submitted_at, status, admin_notes "
+                   + "FROM enrollment_slips ORDER BY created_at DESC, id DESC";
+        try (PreparedStatement ps = DatabaseManager.getConnection().prepareStatement(sql)) {
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    Map<String, Object> row = new LinkedHashMap<String, Object>();
+                    row.put("id", rs.getString("id"));
+                    row.put("studentId", rs.getString("student_id"));
+                    row.put("studentName", rs.getString("student_name"));
+                    row.put("totalUnits", rs.getInt("total_units"));
+                    row.put("queueNumber", rs.getInt("queue_number"));
+                    row.put("submittedAt", rs.getString("submitted_at"));
+                    row.put("status", rs.getString("status"));
+                    row.put("adminNotes", rs.getString("admin_notes"));
+                    records.add(row);
+                }
+            }
+            for (Map<String, Object> row : records) {
+                row.put("subjects", loadAdminSubjects((String) row.get("id")));
+            }
+        } catch (SQLException e) {
+            System.err.println("Could not load admin enrollment records: " + e.getMessage());
+        }
+        return records;
+    }
+
+    private ArrayList<Map<String, Object>> loadAdminSubjects(String slipId) throws SQLException {
+        ArrayList<Map<String, Object>> subjects = new ArrayList<Map<String, Object>>();
+        String sql = "SELECT subject_code, title, units, section, day, start_min, end_min "
+                   + "FROM enrollment_slip_subjects WHERE slip_id=? ORDER BY subject_index";
+        try (PreparedStatement ps = DatabaseManager.getConnection().prepareStatement(sql)) {
+            ps.setString(1, slipId);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    Schedule schedule = new Schedule(rs.getString("day"), rs.getInt("start_min"), rs.getInt("end_min"));
+                    Map<String, Object> subject = new LinkedHashMap<String, Object>();
+                    subject.put("code", rs.getString("subject_code"));
+                    subject.put("title", rs.getString("title"));
+                    subject.put("units", rs.getInt("units"));
+                    subject.put("section", rs.getString("section"));
+                    subject.put("schedule", schedule.toString());
+                    subjects.add(subject);
+                }
+            }
+        }
+        return subjects;
+    }
+
+    /** Updates the registrar's review decision and internal remarks. */
+    public synchronized boolean updateReview(String id, String status, String notes) {
+        String sql = "UPDATE enrollment_slips SET status=?, admin_notes=? WHERE id=?";
+        try (PreparedStatement ps = DatabaseManager.getConnection().prepareStatement(sql)) {
+            ps.setString(1, status);
+            ps.setString(2, notes == null ? "" : notes.trim());
+            ps.setString(3, id);
+            return ps.executeUpdate() > 0;
+        } catch (SQLException e) {
+            System.err.println("Could not update enrollment review: " + e.getMessage());
+            return false;
+        }
     }
 }
