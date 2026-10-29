@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Services | EnrollEase</title>
+<link href="vendor/bootstrap.min.css" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+<link rel="icon" type="image/png" href="img/favicon.png">
+</head>
+<body>
+<nav class="navbar navbar-expand-lg navbar-dark">
+<div class="container">
+<a class="navbar-brand" href="index.html"><img src="img/logo.png" alt="EnrollEase logo">EnrollEase</a>
+<button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#menu"><span class="navbar-toggler-icon"></span></button>
+<div class="collapse navbar-collapse" id="menu"><ul class="navbar-nav ms-auto"><li class="nav-item"><a class="nav-link" href="index.html">Home</a></li><li class="nav-item"><a class="nav-link" href="about.html">About Us</a></li><li class="nav-item"><a class="nav-link active" href="services.html">Services</a></li><li class="nav-item"><a class="nav-link" href="calendar.html">Calendar</a></li><li class="nav-item"><a class="nav-link" href="enrollment.html">Enrollment</a></li><li class="nav-item"><a class="nav-link" href="contact.html">Contact</a></li><li class="nav-item"><a class="nav-link" href="login.html">Login</a></li></ul></div>
+</div>
+</nav>
+<main class="container py-5"><h1 class="page-title">Our Services</h1><p class="text-secondary">Explore the services available through EnrollEase for students and registrar staff.</p>
+<div id="serviceFilters" class="mb-3"><button class="btn btn-primary active" data-filter="all">All</button> <button class="btn btn-outline-primary" data-filter="student">For Students</button> <button class="btn btn-outline-primary" data-filter="staff">For Staff</button></div>
+<div class="row g-4" id="servicesGrid"><div class="col-md-6 col-lg-4 service-item" data-category="student"><div class="service-card"><div class="icon">&#128196;</div><h3>Credential Upload</h3><p>Upload Form 138, PSA birth certificate and other requirements as PDF or image files.</p></div></div><div class="col-md-6 col-lg-4 service-item" data-category="staff"><div class="service-card"><div class="icon">&#9989;</div><h3>Credential Verification</h3><p>Staff approve or reject each document and provide remarks when needed.</p></div></div><div class="col-md-6 col-lg-4 service-item" data-category="student"><div class="service-card"><div class="icon">&#128197;</div><h3>Schedule Checking</h3><p>View available schedules and get flagged for conflicts and full sections.</p></div></div><div class="col-md-6 col-lg-4 service-item" data-category="student"><div class="service-card"><div class="icon">&#128274;</div><h3>Prerequisite Locking</h3><p>Subjects with a failed prerequisite are locked and the allowed unit load is adjusted.</p></div></div><div class="col-md-6 col-lg-4 service-item" data-category="staff"><div class="service-card"><div class="icon">&#128218;</div><h3>Subject and Section Management</h3><p>Add subjects, sections, slots, units and prerequisites.</p></div></div><div class="col-md-6 col-lg-4 service-item" data-category="student"><div class="service-card"><div class="icon">&#128276;</div><h3>Payment Queue Number</h3><p>Get an online queue number and receive an alert when your turn is near.</p></div></div></div></main>
+<footer>
+<div class="container">
+<div class="row">
+<div class="col-md-5 mb-3"><h5><img src="img/logo.png" alt="" class="footer-logo">EnrollEase</h5><p class="small">An automated student enrollment system of the Registrar and Enrollment Services Office, Technological Institute of the Philippines.</p></div>
+<div class="col-md-3 mb-3"><h6>Quick links</h6><a href="index.html">Home</a><br><a href="services.html">Services</a><br><a href="calendar.html">Calendar</a><br><a href="login.html">Login</a></div>
+<div class="col-md-4 mb-3"><h6>Contact</h6><p class="small mb-0">Registrar Office, TIP QC Campus<br>registrar@tip.example.edu<br>Mon - Fri, 8:00 AM - 5:00 PM</p></div>
+</div>
+<hr>
+<p class="text-center small mb-0">EnrollEase &copy; 2026 &ndash; Technological Institute of the Philippines</p>
+</div>
+</footer>
+<button id="backToTop" class="btn btn-primary" type="button">&uarr; Top</button>
+<script src="vendor/jquery.min.js"></script>
+<script src="vendor/bootstrap.bundle.min.js"></script>
+<script src="js/script.js"></script>
+</body>
+</html>

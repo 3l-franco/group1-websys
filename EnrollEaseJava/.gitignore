@@ -1,0 +1,20 @@
+# Java / Eclipse / Maven output
+bin/
+target/
+*.class
+
+# Local-only database files and enrollment data
+*.db
+*.db-shm
+*.db-wal
+slips.ser
+
+# Local secrets and owner-only deployment guide
+.env
+.env.*
+!.env.example
+PERSONAL_DEPLOYMENT_NOTES.md
+
+# OS/editor files
+.DS_Store
+Thumbs.db

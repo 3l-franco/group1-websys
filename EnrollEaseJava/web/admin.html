@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Admin | EnrollEase</title>
+<link href="vendor/bootstrap.min.css" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+<link rel="icon" type="image/png" href="img/favicon.png">
+</head>
+<body>
+<nav class="navbar navbar-expand-lg navbar-dark">
+<div class="container">
+<a class="navbar-brand" href="index.html"><img src="img/logo.png" alt="EnrollEase logo">EnrollEase</a>
+<button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#menu"><span class="navbar-toggler-icon"></span></button>
+<div class="collapse navbar-collapse" id="menu"><ul class="navbar-nav ms-auto"><li class="nav-item"><a class="nav-link" href="index.html">Home</a></li><li class="nav-item"><a class="nav-link" href="about.html">About Us</a></li><li class="nav-item"><a class="nav-link" href="services.html">Services</a></li><li class="nav-item"><a class="nav-link" href="calendar.html">Calendar</a></li><li class="nav-item"><a class="nav-link" href="enrollment.html">Enrollment</a></li><li class="nav-item"><a class="nav-link" href="contact.html">Contact</a></li><li class="nav-item"><a class="nav-link active" href="#" id="logoutLink">Logout</a></li></ul></div>
+</div>
+</nav>
+<main class="container py-5" id="adminPage"><h1 class="page-title">Maintenance</h1><p class="text-secondary">Manage user and staff accounts.</p>
+<div class="row g-4 mb-4"><div class="col-md-6"><div class="panel"><h6>Users</h6><div class="stat-number" id="userCount">0</div></div></div><div class="col-md-6"><div class="panel"><h6>Staff</h6><div class="stat-number" id="staffCount">0</div></div></div></div>
+<div class="d-flex flex-wrap gap-2 align-items-center mb-3"><label class="me-1" for="sortSel">Sort lists by</label><select id="sortSel" class="form-select form-select-sm w-auto"><option value="">As added</option><option value="id">ID / Username</option><option value="name">Name</option></select><button class="btn btn-outline-secondary btn-sm ms-auto" id="undoBtn" type="button">Undo last delete (<span id="undoCount">0</span>)</button></div>
+<div id="adminMsg"></div>
+<ul class="nav nav-tabs mb-3"><li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#usersTab" type="button">User Maintenance</button></li><li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#staffTab" type="button">Staff Maintenance</button></li></ul>
+<div class="tab-content">
+<div class="tab-pane fade show active" id="usersTab"><div class="d-flex justify-content-between align-items-center mb-3"><h2 class="section-title mb-0">Users</h2><button class="btn btn-primary" type="button" data-add="user">+ Add User</button></div>
+<div class="table-responsive"><table class="table table-bordered align-middle bg-white"><thead><tr><th>Student ID</th><th>Full Name</th><th>Email</th><th>Type</th><th>Actions</th></tr></thead><tbody id="userRows"></tbody></table></div></div>
+<div class="tab-pane fade" id="staffTab"><div class="d-flex justify-content-between align-items-center mb-3"><h2 class="section-title mb-0">Staff</h2><button class="btn btn-primary" type="button" data-add="staff">+ Add Staff</button></div>
+<div class="table-responsive"><table class="table table-bordered align-middle bg-white"><thead><tr><th>Username</th><th>Full Name</th><th>Email</th><th>Position</th><th>Actions</th></tr></thead><tbody id="staffRows"></tbody></table></div></div>
+</div></main>
+<div class="modal fade" id="formModal" tabindex="-1"><div class="modal-dialog"><div class="modal-content"><form id="recordForm" novalidate>
+<div class="modal-header"><h5 class="modal-title" id="modalTitle"></h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+<div class="modal-body"><div id="formAlert" class="alert alert-danger d-none"></div>
+<div class="mb-3"><label class="form-label" for="fId" id="lblId"></label><input type="text" class="form-control" id="fId"></div>
+<div class="mb-3"><label class="form-label" for="fName">Full name</label><input type="text" class="form-control" id="fName"></div>
+<div class="mb-3"><label class="form-label" for="fEmail">Email</label><input type="email" class="form-control" id="fEmail"></div>
+<div class="mb-3"><label class="form-label" for="fExtra" id="lblExtra"></label><select class="form-select" id="fExtra"></select></div>
+<div class="mb-3"><label class="form-label" for="fPass">Password <span class="text-secondary small" id="passHint"></span></label><input type="password" class="form-control" id="fPass"></div></div>
+<div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button><button type="submit" class="btn btn-primary">Save</button></div>
+</form></div></div></div>
+<footer>
+<div class="container">
+<div class="row">
+<div class="col-md-5 mb-3"><h5><img src="img/logo.png" alt="" class="footer-logo">EnrollEase</h5><p class="small">An automated student enrollment system of the Registrar and Enrollment Services Office, Technological Institute of the Philippines.</p></div>
+<div class="col-md-3 mb-3"><h6>Quick links</h6><a href="index.html">Home</a><br><a href="services.html">Services</a><br><a href="calendar.html">Calendar</a><br><a href="login.html">Login</a></div>
+<div class="col-md-4 mb-3"><h6>Contact</h6><p class="small mb-0">Registrar Office, TIP QC Campus<br>registrar@tip.example.edu<br>Mon - Fri, 8:00 AM - 5:00 PM</p></div>
+</div>
+<hr>
+<p class="text-center small mb-0">EnrollEase &copy; 2026 &ndash; Technological Institute of the Philippines</p>
+</div>
+</footer>
+<button id="backToTop" class="btn btn-primary" type="button">&uarr; Top</button>
+<script src="vendor/jquery.min.js"></script>
+<script src="vendor/bootstrap.bundle.min.js"></script>
+<script src="js/script.js"></script>
+</body>
+</html>

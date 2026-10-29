@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Calendar | EnrollEase</title>
+<link href="vendor/bootstrap.min.css" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+<link rel="icon" type="image/png" href="img/favicon.png">
+</head>
+<body>
+<nav class="navbar navbar-expand-lg navbar-dark">
+<div class="container">
+<a class="navbar-brand" href="index.html"><img src="img/logo.png" alt="EnrollEase logo">EnrollEase</a>
+<button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#menu"><span class="navbar-toggler-icon"></span></button>
+<div class="collapse navbar-collapse" id="menu"><ul class="navbar-nav ms-auto"><li class="nav-item"><a class="nav-link" href="index.html">Home</a></li><li class="nav-item"><a class="nav-link" href="about.html">About Us</a></li><li class="nav-item"><a class="nav-link" href="services.html">Services</a></li><li class="nav-item"><a class="nav-link active" href="calendar.html">Calendar</a></li><li class="nav-item"><a class="nav-link" href="enrollment.html">Enrollment</a></li><li class="nav-item"><a class="nav-link" href="contact.html">Contact</a></li><li class="nav-item"><a class="nav-link" href="login.html">Login</a></li></ul></div>
+</div>
+</nav>
+<main class="container py-5"><h1 class="page-title">Enrollment Calendar</h1>
+<div class="row g-4"><div class="col-lg-7"><div class="panel"><div class="d-flex justify-content-between align-items-center mb-3"><button class="btn btn-outline-primary btn-sm" id="prevMonth">&laquo; Prev</button><h3 class="m-0" id="calTitle"></h3><button class="btn btn-outline-primary btn-sm" id="nextMonth">Next &raquo;</button></div><table class="table table-bordered text-center mb-0" id="calendar"><thead><tr><th>Sun</th><th>Mon</th><th>Tue</th><th>Wed</th><th>Thu</th><th>Fri</th><th>Sat</th></tr></thead><tbody><tr><td colspan="7" class="text-muted py-4">Loading calendar...</td></tr></tbody></table></div></div>
+<div class="col-lg-5"><div class="panel"><h3>Key dates</h3><ul class="mb-0"><li>Oct 19&ndash;23, 2026: Credential upload and verification</li><li>Oct 26&ndash;30, 2026: Subject enrollment</li><li>Nov 2&ndash;6, 2026: Payment at the cashier</li><li>Nov 9, 2026: Classes begin</li></ul></div></div></div></main>
+<footer>
+<div class="container">
+<div class="row">
+<div class="col-md-5 mb-3"><h5><img src="img/logo.png" alt="" class="footer-logo">EnrollEase</h5><p class="small">An automated student enrollment system of the Registrar and Enrollment Services Office, Technological Institute of the Philippines.</p></div>
+<div class="col-md-3 mb-3"><h6>Quick links</h6><a href="index.html">Home</a><br><a href="services.html">Services</a><br><a href="calendar.html">Calendar</a><br><a href="login.html">Login</a></div>
+<div class="col-md-4 mb-3"><h6>Contact</h6><p class="small mb-0">Registrar Office, TIP QC Campus<br>registrar@tip.example.edu<br>Mon - Fri, 8:00 AM - 5:00 PM</p></div>
+</div>
+<hr>
+<p class="text-center small mb-0">EnrollEase &copy; 2026 &ndash; Technological Institute of the Philippines</p>
+</div>
+</footer>
+<button id="backToTop" class="btn btn-primary" type="button">&uarr; Top</button>
+<script src="vendor/jquery.min.js"></script>
+<script src="vendor/bootstrap.bundle.min.js"></script>
+<script src="js/script.js"></script>
+</body>
+</html>

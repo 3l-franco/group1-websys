@@ -1,0 +1,32 @@
+body{background:#f5f7fa;color:#222c38;font-family:Arial,sans-serif}
+a{color:#4274b9}
+.btn-primary{background:#4274b9;border-color:#4274b9}.btn-primary:hover{background:#1f3a5f;border-color:#1f3a5f}
+.navbar{background:#1f3a5f;padding:12px 0}.navbar-brand{color:#fff;font-weight:700;font-size:1.3rem}
+.navbar-brand img{height:44px;width:auto;margin-right:10px}
+.navbar .nav-link{color:#dbe6f3;margin-left:10px;font-size:15px}.navbar .nav-link:hover,.navbar .nav-link.active{color:#fff;text-decoration:underline}
+footer{background:#1f3a5f;color:#dbe6f3;padding:30px 0 20px;margin-top:50px}footer a{color:#dbe6f3}
+#backToTop{display:none;position:fixed;right:20px;bottom:20px;z-index:99}
+.page-title,.section-title{color:#1f3a5f;font-weight:700}.page-title{font-size:2.2rem;margin-bottom:.5rem}.section-title{font-size:1.5rem;margin-bottom:1.2rem}
+.slide{min-height:340px;display:flex;align-items:center;justify-content:center;text-align:center;color:#fff;padding:40px 70px}
+.slide h1{font-size:2.4rem;font-weight:700}.slide p{max-width:600px;margin:10px auto 20px}
+.slide-1{background:linear-gradient(135deg,#1f3a5f,#4274b9)}.slide-2{background:linear-gradient(135deg,#2e5a4b,#4a9d7c)}.slide-3{background:linear-gradient(135deg,#5a3d7a,#8d6fb8)}
+.info-card,.service-card,.panel,.queue-card{background:#fff;border:1px solid #d3dce5;border-radius:6px;padding:22px;height:100%;transition:box-shadow .2s,transform .2s}
+.info-card:hover,.service-card:hover{box-shadow:0 4px 12px rgba(39,63,104,.15);transform:translateY(-2px)}
+.icon{font-size:32px;margin-bottom:10px}.info-card h3,.service-card h3,.panel h3{color:#1f3a5f;font-size:1.15rem;font-weight:700}
+.info-card p,.service-card p{margin:0;line-height:1.55}
+.embed iframe{width:100%;min-height:300px;height:100%;border:0;border-radius:6px}
+.panel ol{padding-left:22px;line-height:1.8}
+.notice{background:#e9f2fc;border-left:4px solid #3674c1;padding:12px 14px}
+.login-container{min-height:75vh;display:flex;justify-content:center;align-items:center}
+.login-card{background:#fff;border:1px solid #d3dce5;border-radius:6px;padding:35px;width:100%;max-width:470px}
+.login-card h1{font-size:1.8rem;color:#1f3a5f;font-weight:700}.login-card .nav-link{color:#526785;font-weight:600}.login-card .nav-link.active{color:#1f3a5f;border-bottom:3px solid #4274b9}
+.demo-account{background:#f4f6f9;border-radius:4px;padding:12px;font-size:13px;color:#526785}
+.queue-card{text-align:center;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:170px}
+.queue-card h3{color:#1f3a5f;font-size:2.6rem;font-weight:700}
+#calendar td{height:52px;vertical-align:middle}#calendar td.today{background:#4274b9;color:#fff;font-weight:700}#calendar td.event{background:#e9f2fc;font-weight:700}
+.stat-number{font-size:1.8rem;font-weight:700;color:#1f3a5f}
+.nav-tabs .nav-link{color:#526785;font-weight:600}.nav-tabs .nav-link.active{color:#1f3a5f;border-bottom:3px solid #4274b9}
+@media(max-width:768px){.slide{padding:30px 50px}.slide h1{font-size:1.7rem}.page-title{font-size:1.8rem}.navbar .nav-link{margin-left:0}}
+
+.footer-logo{height:30px;width:auto;margin-right:8px;vertical-align:middle}
+.login-logo{height:80px;width:auto}

@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Contact | EnrollEase</title>
+<link href="vendor/bootstrap.min.css" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+<link rel="icon" type="image/png" href="img/favicon.png">
+</head>
+<body>
+<nav class="navbar navbar-expand-lg navbar-dark">
+<div class="container">
+<a class="navbar-brand" href="index.html"><img src="img/logo.png" alt="EnrollEase logo">EnrollEase</a>
+<button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#menu"><span class="navbar-toggler-icon"></span></button>
+<div class="collapse navbar-collapse" id="menu"><ul class="navbar-nav ms-auto"><li class="nav-item"><a class="nav-link" href="index.html">Home</a></li><li class="nav-item"><a class="nav-link" href="about.html">About Us</a></li><li class="nav-item"><a class="nav-link" href="services.html">Services</a></li><li class="nav-item"><a class="nav-link" href="calendar.html">Calendar</a></li><li class="nav-item"><a class="nav-link" href="enrollment.html">Enrollment</a></li><li class="nav-item"><a class="nav-link active" href="contact.html">Contact</a></li><li class="nav-item"><a class="nav-link" href="login.html">Login</a></li></ul></div>
+</div>
+</nav>
+<main class="container py-5"><h1 class="page-title">Contact Us</h1>
+<div class="row g-4"><div class="col-lg-8"><div class="panel"><form id="contactForm" novalidate>
+<div class="mb-3"><label class="form-label" for="cName">Full name</label><input type="text" class="form-control" id="cName" placeholder="Last name, First name M."></div>
+<div class="mb-3"><label class="form-label" for="cEmail">Email</label><input type="email" class="form-control" id="cEmail" placeholder="name@email.com"></div>
+<div class="mb-3"><span class="form-label d-block">I am a</span><div class="form-check form-check-inline"><input class="form-check-input" type="radio" name="st" id="newStudent" checked><label class="form-check-label" for="newStudent">New student</label></div><div class="form-check form-check-inline"><input class="form-check-input" type="radio" name="st" id="contStudent"><label class="form-check-label" for="contStudent">Continuing student</label></div></div>
+<div class="mb-3"><label class="form-label" for="cTopic">Topic</label><select class="form-select" id="cTopic"><option value="">-- Select topic --</option><option>Enrollment</option><option>Credentials</option><option>Schedule</option><option>Payment Queue</option><option>Other</option></select></div>
+<div class="mb-3"><label class="form-label" for="cMessage">Message</label><textarea class="form-control" id="cMessage" rows="4" placeholder="Write your message here..."></textarea></div>
+<div class="form-check mb-3"><input class="form-check-input" type="checkbox" id="cAgree"><label class="form-check-label" for="cAgree">I agree to be contacted by the Registrar Office.</label></div>
+<button type="submit" class="btn btn-primary">Send message</button><div id="contactAlert" class="alert alert-success mt-3 d-none">Your message has been submitted successfully.</div></form></div></div>
+<div class="col-lg-4"><div class="panel"><h6>Office</h6><p>Registrar and Enrollment Services Office<br>Technological Institute of the Philippines</p><h6>Email</h6><p>registrar@tip.example.edu</p><h6>Office hours</h6><p class="mb-0">Monday to Friday, 8:00 AM - 5:00 PM</p></div></div></div></main>
+<footer>
+<div class="container">
+<div class="row">
+<div class="col-md-5 mb-3"><h5><img src="img/logo.png" alt="" class="footer-logo">EnrollEase</h5><p class="small">An automated student enrollment system of the Registrar and Enrollment Services Office, Technological Institute of the Philippines.</p></div>
+<div class="col-md-3 mb-3"><h6>Quick links</h6><a href="index.html">Home</a><br><a href="services.html">Services</a><br><a href="calendar.html">Calendar</a><br><a href="login.html">Login</a></div>
+<div class="col-md-4 mb-3"><h6>Contact</h6><p class="small mb-0">Registrar Office, TIP QC Campus<br>registrar@tip.example.edu<br>Mon - Fri, 8:00 AM - 5:00 PM</p></div>
+</div>
+<hr>
+<p class="text-center small mb-0">EnrollEase &copy; 2026 &ndash; Technological Institute of the Philippines</p>
+</div>
+</footer>
+<button id="backToTop" class="btn btn-primary" type="button">&uarr; Top</button>
+<script src="vendor/jquery.min.js"></script>
+<script src="vendor/bootstrap.bundle.min.js"></script>
+<script src="js/script.js"></script>
+</body>
+</html>

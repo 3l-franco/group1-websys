@@ -1,0 +1,11 @@
+# Keep the container build context small and exclude local state/secrets.
+.git
+bin
+lib/
+target
+*.db
+*.db-shm
+*.db-wal
+slips.ser
+.env
+PERSONAL_DEPLOYMENT_NOTES.md
