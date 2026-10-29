@@ -1,17 +1,19 @@
 # EnrollEase
 
-Academic web systems project. The application uses a Java HTTP backend with HTML, CSS, and JavaScript pages.
+Academic web systems project using a Java HTTP backend with HTML, CSS, and JavaScript pages.
 
 ## Deployment branch status
 
-The deployment changes have been prepared in a separate downloadable source bundle, but the application source has **not yet been committed to this branch** and no live deployment exists yet.
+The application source and deployment files have been pushed to the `deployment/neon-render` branch. The application has **not yet been deployed to Render**, and the live Neon connection still needs to be configured and tested.
 
-Before deploying, extract the contents of the provided `EnrollEaseJava_Deployment.zip` so this repository root contains `Dockerfile`, `pom.xml`, `src/`, and `web/`. Preserve a copy of the approved original before replacing or moving files.
+The Java application is in `EnrollEaseJava/`. Its Dockerfile and Maven configuration are inside that directory, so configure Render's **Root Directory** as `EnrollEaseJava`, runtime as **Docker**, and branch as `deployment/neon-render`.
 
 ## Intended online architecture
 
-- GitHub stores project source.
+- GitHub stores the project source.
 - Render runs the Java application using Docker.
 - Neon hosts PostgreSQL for accounts, subjects, and submitted enrollment slips.
 
-Configure database credentials and the online administrator password through Render's environment settings. Never commit secrets, local database files, or real student data. Use fictional demonstration records only.
+Set `DATABASE_URL`, `DATABASE_USER`, `DATABASE_PASSWORD`, `ADMIN_USERNAME`, and `ADMIN_PASSWORD` through Render's environment settings. Do not commit actual credentials, local database files, or real student data.
+
+Use only fictional demonstration records. This is an academic demo, not a production enrollment system. Demo account passwords in the seeded records are intentionally for demonstration only and must never be reused.
