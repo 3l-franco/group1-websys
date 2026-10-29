@@ -18,13 +18,13 @@
 </nav>
 <main class="container py-5"><h1 class="page-title">Contact Us</h1>
 <div class="row g-4"><div class="col-lg-8"><div class="panel"><form id="contactForm" novalidate>
-<div class="mb-3"><label class="form-label" for="cName">Full name</label><input type="text" class="form-control" id="cName" placeholder="Last name, First name M."></div>
-<div class="mb-3"><label class="form-label" for="cEmail">Email</label><input type="email" class="form-control" id="cEmail" placeholder="name@email.com"></div>
+<div class="mb-3"><label class="form-label" for="cName">Full name</label><input type="text" class="form-control" id="cName" aria-describedby="contactError" placeholder="Last name, First name M."></div>
+<div class="mb-3"><label class="form-label" for="cEmail">Email</label><input type="email" class="form-control" id="cEmail" aria-describedby="contactError" placeholder="name@email.com"></div>
 <div class="mb-3"><span class="form-label d-block">I am a</span><div class="form-check form-check-inline"><input class="form-check-input" type="radio" name="st" id="newStudent" checked><label class="form-check-label" for="newStudent">New student</label></div><div class="form-check form-check-inline"><input class="form-check-input" type="radio" name="st" id="contStudent"><label class="form-check-label" for="contStudent">Continuing student</label></div></div>
 <div class="mb-3"><label class="form-label" for="cTopic">Topic</label><select class="form-select" id="cTopic"><option value="">-- Select topic --</option><option>Enrollment</option><option>Credentials</option><option>Schedule</option><option>Payment Queue</option><option>Other</option></select></div>
 <div class="mb-3"><label class="form-label" for="cMessage">Message</label><textarea class="form-control" id="cMessage" rows="4" placeholder="Write your message here..."></textarea></div>
 <div class="form-check mb-3"><input class="form-check-input" type="checkbox" id="cAgree"><label class="form-check-label" for="cAgree">I agree to be contacted by the Registrar Office.</label></div>
-<button type="submit" class="btn btn-primary">Send message</button><div id="contactAlert" class="alert alert-success mt-3 d-none">Your message has been submitted successfully.</div></form></div></div>
+<button type="submit" class="btn btn-primary">Check message</button><div id="contactError" class="alert alert-danger mt-3 d-none" role="alert" aria-live="polite"></div><div id="contactAlert" class="alert alert-info mt-3 d-none" role="status" aria-live="polite">Demo only: the form validates your message but does not save or send it.</div></form></div></div>
 <div class="col-lg-4"><div class="panel"><h6>Office</h6><p>Registrar and Enrollment Services Office<br>Technological Institute of the Philippines</p><h6>Email</h6><p>registrar@tip.example.edu</p><h6>Office hours</h6><p class="mb-0">Monday to Friday, 8:00 AM - 5:00 PM</p></div></div></div></main>
 <footer>
 <div class="container">
