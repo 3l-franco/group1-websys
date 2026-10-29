@@ -95,18 +95,46 @@ public class DatabaseManager {
             st.execute("CREATE TABLE IF NOT EXISTS enrollment_slips ("
                 + "id TEXT PRIMARY KEY, student_id TEXT NOT NULL, student_name TEXT NOT NULL, "
                 + "total_units INTEGER NOT NULL, queue_number INTEGER NOT NULL, submitted_at TEXT NOT NULL, "
-                + "created_at BIGINT NOT NULL)");
+                + "created_at BIGINT NOT NULL, status TEXT NOT NULL DEFAULT 'Pending Review', "
+                + "admin_notes TEXT NOT NULL DEFAULT '')");
+            // Migrate databases created before enrollment review was added.
+            ensureColumn(st, "enrollment_slips", "status", "TEXT NOT NULL DEFAULT 'Pending Review'");
+            ensureColumn(st, "enrollment_slips", "admin_notes", "TEXT NOT NULL DEFAULT ''");
             st.execute("CREATE TABLE IF NOT EXISTS enrollment_slip_subjects ("
                 + "slip_id TEXT NOT NULL, subject_index INTEGER NOT NULL, subject_code TEXT NOT NULL, "
                 + "title TEXT NOT NULL, units INTEGER NOT NULL, section TEXT NOT NULL, day TEXT NOT NULL, "
                 + "start_min INTEGER NOT NULL, end_min INTEGER NOT NULL, slots INTEGER NOT NULL, "
                 + "PRIMARY KEY (slip_id, subject_index))");
+            st.execute("CREATE TABLE IF NOT EXISTS student_credentials ("
+                + "id TEXT PRIMARY KEY, student_id TEXT NOT NULL, student_name TEXT NOT NULL, "
+                + "credential_type TEXT NOT NULL, file_name TEXT NOT NULL, content_type TEXT NOT NULL, "
+                + "data_base64 TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'Pending Review', "
+                + "admin_notes TEXT NOT NULL DEFAULT '', submitted_at TEXT NOT NULL, "
+                + "reviewed_at TEXT NOT NULL DEFAULT '', reviewed_by TEXT NOT NULL DEFAULT '')");
         } catch (SQLException e) {
             System.out.println("Database error: " + e.getMessage());
             return false;
         }
         seedData();
         return true;
+    }
+
+    /** Adds a missing column without disturbing data created by an earlier version. */
+    private static void ensureColumn(Statement statement, String table, String column, String definition) {
+        try (java.sql.ResultSet ignored = statement.executeQuery("SELECT " + column + " FROM " + table + " WHERE 1=0")) {
+            // Column already exists.
+        } catch (SQLException missing) {
+            try {
+                statement.execute("ALTER TABLE " + table + " ADD COLUMN " + column + " " + definition);
+            } catch (SQLException migrationError) {
+                // If another process added it first, startup can continue. Other failures remain visible.
+                try (java.sql.ResultSet ignored = statement.executeQuery("SELECT " + column + " FROM " + table + " WHERE 1=0")) {
+                    // The column now exists.
+                } catch (SQLException stillMissing) {
+                    System.out.println("Database migration error for " + table + "." + column + ": " + migrationError.getMessage());
+                }
+            }
+        }
     }
 
     // Inserts the same sample records the website had, only when the tables are empty.
