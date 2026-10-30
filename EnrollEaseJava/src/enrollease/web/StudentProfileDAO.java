@@ -35,13 +35,41 @@ public class StudentProfileDAO {
         }
     }
 
-    /** Returns true for pre-existing accounts without a profile, preserving legacy access. */
+    /** One-time, additive migration for existing accounts created before applications existed.
+     * Only Continuing Student accounts retain the legacy path. New Students and Transferees
+     * are placed into the appropriate review queue rather than bypassing document checks. */
+    public void migrateLegacyStudentAccounts() {
+        AccountDAO accounts = new AccountDAO();
+        for (Person person : accounts.getByRole("STUDENT")) {
+            if ("Continuing Student".equals(person.getExtra()) || profileExists(person.getId())) continue;
+            boolean transferee = "Transferee".equals(person.getExtra());
+            String status = transferee ? "ACADEMIC_EVALUATION" : "REQUIREMENTS_PENDING";
+            String programId = transferee ? "" : "BSIT";
+            create(person.getId(), person.getExtra(), status, programId, "", "");
+        }
+    }
+
+    private boolean profileExists(String studentId) {
+        try (PreparedStatement ps = DatabaseManager.getConnection().prepareStatement(
+                "SELECT 1 FROM student_profiles WHERE student_id=?")) {
+            ps.setString(1, studentId);
+            try (ResultSet rs = ps.executeQuery()) { return rs.next(); }
+        } catch (SQLException e) {
+            System.err.println("Could not check existing student profile: " + e.getMessage());
+            return true;
+        }
+    }
+
+    /** Only pre-existing Continuing Student accounts retain the legacy enrollment path. */
     public boolean canEnroll(String studentId) {
         String sql = "SELECT status, program_id, curriculum_id, requirements_confirmed FROM student_profiles WHERE student_id=?";
         try (PreparedStatement ps = DatabaseManager.getConnection().prepareStatement(sql)) {
             ps.setString(1, studentId);
             try (ResultSet rs = ps.executeQuery()) {
-                if (!rs.next()) return true;
+                if (!rs.next()) {
+                    Person person = new AccountDAO().findById(studentId);
+                    return person != null && "Continuing Student".equals(person.getExtra());
+                }
                 return "APPROVED".equals(rs.getString("status"))
                         && rs.getInt("requirements_confirmed") == 1
                         && !empty(rs.getString("program_id")) && !empty(rs.getString("curriculum_id"));
@@ -71,14 +99,21 @@ public class StudentProfileDAO {
             System.err.println("Could not load student profile: " + e.getMessage());
         }
 
-        // Older accounts predate application profiles. They retain their existing
-        // enrollment access and use the default legacy BSIT offering set.
+        // Only pre-existing Continuing Student accounts keep their legacy enrollment access.
+        // Other older classifications remain pending if profile migration could not complete.
         Person person = new AccountDAO().findById(studentId);
         String type = person == null ? "" : person.getExtra();
-        return Json.map("studentType", type, "status", "APPROVED",
-                "programId", "BSIT", "curriculumId", "BSIT-2026",
+        if ("Continuing Student".equals(type)) {
+            return Json.map("studentType", type, "status", "APPROVED",
+                    "programId", "BSIT", "curriculumId", "BSIT-2026",
+                    "previousSchool", "", "previousProgram", "", "adminNotes", "",
+                    "requirementsConfirmed", true, "legacy", true);
+        }
+        String status = "Transferee".equals(type) ? "ACADEMIC_EVALUATION" : "REQUIREMENTS_PENDING";
+        return Json.map("studentType", type, "status", status,
+                "programId", "Transferee".equals(type) ? "" : "BSIT", "curriculumId", "",
                 "previousSchool", "", "previousProgram", "", "adminNotes", "",
-                "requirementsConfirmed", true, "legacy", true);
+                "requirementsConfirmed", false);
     }
 
     public ArrayList<Map<String, Object>> getApplications() {

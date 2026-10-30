@@ -64,6 +64,7 @@ public class Api {
 
     public Api() {
         academicDao.ensureDefaultProgramAndCurriculum();
+        profileDao.migrateLegacyStudentAccounts();
         academicDao.migrateLegacySections();
         catalog = new Catalog();
     }
@@ -741,6 +742,12 @@ public class Api {
         if (!Arrays.asList(students ? SiteContent.STUDENT_TYPES : SiteContent.STAFF_POSITIONS).contains(extra)) {
             return fail("Please choose a valid " + (students ? "student type." : "position."));
         }
+        if (students && "Continuing Student".equals(extra)
+                && (adding || !(old instanceof Student)
+                    || !"Continuing Student".equals(old.getExtra()))) {
+            return fail("Continuing-student account creation and reclassification are parked until the registrar provides the official Student ID masterlist.");
+        }
+
         if (!adding && password.isEmpty()) {
             password = old.getPassword();                    // blank = keep current password
         }
