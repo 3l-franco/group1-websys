@@ -210,7 +210,7 @@ jobs:
           expect(conflict.get("ok") is False and "Schedule conflict" in conflict.get("message", ""),
                  "Laboratory timetable conflict was not detected")
 
-          result = call(student, "/api/submit")
+          result = call(student, "/api/submit", {})
           expect(result.get("ok") is True, "Enrollment submission failed")
           records = call(registrar, "/api/staff/enrollments")["records"]
           record = next(item for item in records if item["studentId"] == student_id)
