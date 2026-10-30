@@ -24,6 +24,7 @@ import java.util.UUID;
 import com.sun.net.httpserver.HttpExchange;
 
 import enrollease.db.AccountDAO;
+import enrollease.db.AcademicDAO;
 import enrollease.db.DatabaseManager;
 import enrollease.db.CredentialDAO;
 import enrollease.db.EnrollmentDAO;
@@ -52,7 +53,7 @@ import enrollease.util.Validator;
 public class Api {
 
     private AccountDAO accountDao = new AccountDAO();
-    private Catalog catalog = new Catalog();
+    private Catalog catalog;
     private QueueManager queueManager = new QueueManager();
     private EnrollmentDAO enrollmentDao = new EnrollmentDAO();
     private CredentialDAO credentialDao = new CredentialDAO();
@@ -60,6 +61,12 @@ public class Api {
     private AcademicDAO academicDao = new AcademicDAO();
     private MyStack<Person> deletedStack = new MyStack<Person>();      // for "Undo last delete"
     private Map<String, Session> sessions = new HashMap<String, Session>();
+
+    public Api() {
+        academicDao.ensureDefaultProgramAndCurriculum();
+        academicDao.migrateLegacySections();
+        catalog = new Catalog();
+    }
 
     // Static nested class: who is logged in for one browser.
     private static class Session {
@@ -539,7 +546,8 @@ public class Api {
             return fail("Choose a valid enrollment status.");
         }
         if (notes.length() > 1000) return fail("Remarks must be 1,000 characters or fewer.");
-        if (!enrollmentDao.updateReview(id, status, notes)) return fail("Could not update the enrollment record.");
+        if (!enrollmentDao.updateReview(id, status, notes)) return fail("Could not update the enrollment record. Re-check section capacity if restoring a previously rejected enrollment.");
+        catalog.reload();
         return ok("message", "Enrollment status updated to " + status + ".");
     }
 
@@ -609,11 +617,13 @@ public class Api {
         if (studentId.isEmpty()) return fail("Student ID is required.");
         if (!Arrays.asList("REQUIREMENTS_PENDING", "ACADEMIC_EVALUATION", "APPROVED", "REJECTED").contains(status)) return fail("Choose a valid application status.");
         if (notes.length() > 1000) return fail("Remarks must be 1,000 characters or fewer.");
+        boolean requirementsConfirmed = "true".equalsIgnoreCase(param(p, "requirementsConfirmed"));
         if ("APPROVED".equals(status)) {
             if (!academicDao.programExists(programId) || !academicDao.curriculumBelongsToProgram(curriculumId, programId)) return fail("Assign a valid program and matching curriculum before approval.");
-            if (credentialDao.countVerifiedForStudent(studentId) < 1) return fail("At least one uploaded requirement must be marked Verified before approval. Confirm the complete official checklist manually.");
+            if (credentialDao.countVerifiedForStudent(studentId) < 1) return fail("At least one submitted requirement must be marked Verified before approval.");
+            if (!requirementsConfirmed) return fail("Confirm that all required documents have been checked against the registrar's official requirements checklist.");
         }
-        if (!profileDao.updateReview(studentId, status, programId, curriculumId, notes)) return fail("Could not update the student application.");
+        if (!profileDao.updateReview(studentId, status, programId, curriculumId, notes, requirementsConfirmed)) return fail("Could not update the student application.");
         return ok("message", "Student application updated to " + status + ".");
     }
 
@@ -744,16 +754,12 @@ public class Api {
         if (!saved) {
             return fail("Could not save the record.");
         }
-        if (students && adding) {
-            String applicationStatus = "Continuing Student".equals(extra) ? "APPROVED"
-                    : ("Transferee".equals(extra) ? "ACADEMIC_EVALUATION" : "REQUIREMENTS_PENDING");
-            String programId = "BSIT";
+        if (students && adding && !"Continuing Student".equals(extra)) {
+            String applicationStatus = "Transferee".equals(extra) ? "ACADEMIC_EVALUATION" : "REQUIREMENTS_PENDING";
+            String programId = "New Student".equals(extra) ? "BSIT" : "";
             if (!profileDao.create(id, extra, applicationStatus, programId, "", "")) {
                 accountDao.delete(id);
                 return fail("The account could not be linked to its student application profile.");
-            }
-            if ("Continuing Student".equals(extra)) {
-                profileDao.updateReview(id, "APPROVED", "BSIT", "BSIT-2026", "Added by administrator using the existing registrar record.");
             }
         } else if (students) {
             if (!oldId.equals(id) && !profileDao.renameStudentId(oldId, id)) {

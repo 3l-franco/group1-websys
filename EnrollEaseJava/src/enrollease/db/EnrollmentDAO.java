@@ -55,9 +55,11 @@ public class EnrollmentDAO {
                     ps.setString(4, subject.getTitle());
                     ps.setInt(5, subject.getUnits());
                     ps.setString(6, subject.getSection());
-                    ps.setString(7, subject.getSchedule().getDay());
-                    ps.setInt(8, subject.getSchedule().getStartMinute());
-                    ps.setInt(9, subject.getSchedule().getEndMinute());
+                    Schedule primarySchedule = subject.getLectureSchedule() != null
+                            ? subject.getLectureSchedule() : subject.getLabSchedule();
+                    ps.setString(7, primarySchedule.getDay());
+                    ps.setInt(8, primarySchedule.getStartMinute());
+                    ps.setInt(9, primarySchedule.getEndMinute());
                     ps.setInt(10, subject.getSlots());
                     ps.setString(11, subject.getOfferingId());
                     ps.setInt(12, subject.getLectureUnits());
@@ -124,9 +126,12 @@ public class EnrollmentDAO {
                         subjects.add(new Subject(rs.getString("subject_code"), rs.getString("title"),
                                 rs.getInt("units"), rs.getString("section"), schedule, rs.getInt("slots")));
                     } else {
+                        int lectureUnits = rs.getInt("lecture_units");
+                        int labUnits = rs.getInt("lab_units");
+                        Schedule lecture = lectureUnits > 0 ? schedule : null;
                         subjects.add(new Subject(offeringId, rs.getString("subject_code"), rs.getString("title"),
-                                rs.getInt("lecture_units"), rs.getInt("lab_units"), rs.getString("section"),
-                                schedule, lab, 0, rs.getInt("slots"), 0));
+                                lectureUnits, labUnits, rs.getString("section"),
+                                lecture, lab, 0, rs.getInt("slots"), 0));
                     }
                 }
             }
@@ -184,7 +189,10 @@ public class EnrollmentDAO {
                     subject.put("labUnits", labUnits);
                     String labDay = rs.getString("lab_day");
                     Schedule lab = labDay == null || labDay.isEmpty() ? null : new Schedule(labDay, rs.getInt("lab_start_min"), rs.getInt("lab_end_min"));
-                    subject.put("schedule", schedule.toString() + (lab == null ? "" : " | LAB " + lab.toString()));
+                    int scheduledLectureUnits = rs.getInt("lecture_units");
+                    subject.put("schedule", (scheduledLectureUnits > 0 ? "LEC " : "")
+                            + (scheduledLectureUnits > 0 || lab == null ? schedule.toString() : "")
+                            + (lab == null ? "" : ((scheduledLectureUnits > 0 ? " | " : "") + "LAB " + lab.toString())));
                     subjects.add(subject);
                 }
             }

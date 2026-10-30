@@ -80,6 +80,11 @@ public class StudentSession {
         if (s == null) return "Section offering not found. Refresh the subject list and try again.";
         if (ticket != null) return "Your enrollment was already submitted.";
         if (selected.contains(s)) return s.getCode() + " is already selected.";
+        for (Subject chosen : selected) {
+            if (chosen.getCode().equalsIgnoreCase(s.getCode())) {
+                return "A section of " + s.getCode() + " is already selected. Remove it before choosing another section.";
+            }
+        }
         if (lockedCodes.contains(s.getCode())) return s.getCode() + " is " + statusOf(s) + ".";
         if (s.isFull()) return s.getCode() + " is full.";
         String conflict = timetable.findConflict(s);
@@ -96,11 +101,14 @@ public class StudentSession {
     }
 
     public String remove(String offeringId) {
+        if (ticket != null) return "Your enrollment was already submitted.";
         Subject s = null;
         for (Subject selectedSubject : selected) {
-            if (selectedSubject.getOfferingId().equals(offeringId)) { s = selectedSubject; break; }
+            if (offeringId != null && offeringId.equals(selectedSubject.getOfferingId())) {
+                s = selectedSubject;
+                break;
+            }
         }
-        if (ticket != null) return "Your enrollment was already submitted.";
         if (s == null || !selected.remove(s)) return "That section is not in your selected list.";
         timetable.remove(s);
         units -= s.getUnits();
