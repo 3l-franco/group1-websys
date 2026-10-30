@@ -101,6 +101,17 @@ public class AccountDAO implements Dao<Person> {
         return null;
     }
 
+    /** Returns a staff account when its username and password match. */
+    public Staff loginStaff(String username, String password) {
+        for (Person person : getByRole("STAFF")) {
+            if (person instanceof Staff && person.getId().equals(username)
+                    && person.checkPassword(password)) {
+                return (Staff) person;
+            }
+        }
+        return null;
+    }
+
     /** Next ID in the website's format: 2026-00126, 2026-00127, ... */
     public String nextStudentId() {
         int max = 0;

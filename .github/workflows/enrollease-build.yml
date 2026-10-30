@@ -1,0 +1,306 @@
+name: EnrollEase Java build
+on:
+  pull_request:
+    branches: [deployment/neon-render]
+    paths:
+      - 'EnrollEaseJava/**'
+      - '.github/workflows/enrollease-build.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: enrollease_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d enrollease_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+      - name: Compile and package
+        run: mvn -B -f EnrollEaseJava/pom.xml clean package
+      - name: Validate browser JavaScript
+        run: node --check EnrollEaseJava/web/js/script.js
+      - name: SQLite and API integration smoke test
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd EnrollEaseJava
+          export SQLITE_DB_PATH="$RUNNER_TEMP/enrollease-smoke.db"
+          export PORT=18080
+          export ADMIN_USERNAME=smoke-admin
+          export ADMIN_PASSWORD=smoke-admin-password
+          java -jar target/enrollease-1.0.0.jar > "$RUNNER_TEMP/enrollease-smoke.log" 2>&1 &
+          APP_PID=$!
+          trap 'kill "$APP_PID" 2>/dev/null || true' EXIT
+          READY=0
+          for attempt in $(seq 1 30); do
+            if curl -fsS "http://127.0.0.1:$PORT/api/services" >/dev/null; then READY=1; break; fi
+            sleep 1
+          done
+          if [ "$READY" -ne 1 ]; then cat "$RUNNER_TEMP/enrollease-smoke.log"; exit 1; fi
+          python3 - <<'PY'
+          import base64
+          import http.cookiejar
+          import json
+          import re
+          import urllib.parse
+          import urllib.request
+
+          BASE = "http://127.0.0.1:18080"
+
+          def client():
+              return urllib.request.build_opener(
+                  urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar())
+              )
+
+          def call(opener, path, values=None):
+              data = None
+              headers = {}
+              if values is not None:
+                  data = urllib.parse.urlencode(values).encode("utf-8")
+                  headers["Content-Type"] = "application/x-www-form-urlencoded"
+              request = urllib.request.Request(BASE + path, data=data, headers=headers)
+              with opener.open(request, timeout=10) as response:
+                  return json.loads(response.read().decode("utf-8"))
+
+          def expect(condition, message):
+              if not condition:
+                  raise AssertionError(message)
+
+          # Existing accounts remain usable without being forced into the parked
+          # continuing-student masterlist workflow.
+          legacy = client()
+          result = call(legacy, "/api/login", {"id": "2026-00123", "password": "demo123"})
+          expect(result.get("role") == "student", "Legacy student login failed")
+          status = call(legacy, "/api/application/status")["application"]
+          expect(status.get("legacy") is True and status.get("status") == "APPROVED",
+                 "Legacy student profile fallback did not preserve access")
+          legacy_catalog = call(legacy, "/api/subjects")
+          expect(len(legacy_catalog.get("subjects", [])) >= 5,
+                 "Legacy subjects were not migrated into section offerings")
+
+          # Admin account maintenance creates a staff account which must authenticate.
+          admin = client()
+          result = call(admin, "/api/login",
+                        {"id": "smoke-admin", "password": "smoke-admin-password"})
+          expect(result.get("role") == "admin", "Admin login failed")
+          result = call(admin, "/api/admin/add", {
+              "role": "staff", "id": "smoke-clerk", "name": "Smoke Clerk",
+              "email": "smoke.clerk@example.test", "extra": "Clerk", "password": "clerk-pass"
+          })
+          expect(result.get("ok") is True, "Staff Maintenance could not create a staff account")
+          clerk = client()
+          result = call(clerk, "/api/login", {"id": "smoke-clerk", "password": "clerk-pass"})
+          expect(result.get("role") == "staff", "Staff Maintenance account could not log in")
+          expect(call(clerk, "/api/staff/me").get("position") == "Clerk",
+                 "Staff role was not restored in the session")
+
+          # Add a second program, curriculum, subjects, and separate LEC/LAB offerings.
+          result = call(admin, "/api/admin/academic/program",
+                        {"code": "QA", "name": "Quality Assurance"})
+          expect(result.get("ok") is True, "Program creation failed")
+          result = call(admin, "/api/admin/academic/curriculum", {
+              "programId": "QA", "name": "QA Curriculum", "effectiveYear": "Smoke Test"
+          })
+          expect(result.get("ok") is True, "Curriculum creation failed")
+          curricula = call(admin, "/api/admin/academic/curricula?programId=QA")["curricula"]
+          expect(len(curricula) == 1, "Program curriculum could not be loaded")
+          curriculum_id = curricula[0]["id"]
+
+          for code, title in [("QA 101", "QA Testing Fundamentals"),
+                              ("QA 102", "QA Automation Fundamentals")]:
+              result = call(admin, "/api/admin/academic/subject", {"code": code, "title": title})
+              expect(result.get("ok") is True, "Subject catalog creation failed for " + code)
+
+          for code, section, lecture_day, lecture_start, lecture_end in [
+              ("QA 101", "A", "Mon", "07:00", "08:00"),
+              ("QA 102", "A", "Thu", "07:00", "08:00")
+          ]:
+              result = call(admin, "/api/admin/academic/section", {
+                  "subjectCode": code, "programId": "QA", "curriculumId": curriculum_id,
+                  "section": section, "lectureUnits": "3", "labUnits": "1",
+                  "minimum": "2", "maximum": "25",
+                  "lectureDay": lecture_day, "lectureStart": lecture_start, "lectureEnd": lecture_end,
+                  "labDay": "Tue", "labStart": "09:00", "labEnd": "10:00"
+              })
+              expect(result.get("ok") is True, "Section offering creation failed for " + code)
+
+          # Transferees retain their prior-school data and do not inherit the
+          # new-student's hidden intended-program field.
+          public = client()
+          result = call(public, "/api/register", {
+              "name": "Smoke Transferee", "email": "transferee@example.test",
+              "type": "Transferee", "password": "transfer-pass", "programId": "QA",
+              "previousSchool": "Previous College", "previousProgram": "BS Computer Science"
+          })
+          expect(result.get("ok") is True, "Transferee registration failed")
+          transfer_id = re.search(r"Student ID is ([0-9-]+)", result.get("message", "")).group(1)
+          transferee = client()
+          result = call(transferee, "/api/login",
+                        {"id": transfer_id, "password": "transfer-pass"})
+          expect(result.get("role") == "student", "Transferee login failed")
+          transfer_app = call(transferee, "/api/application/status")["application"]
+          expect(transfer_app.get("status") == "ACADEMIC_EVALUATION"
+                 and transfer_app.get("programId") == ""
+                 and transfer_app.get("previousSchool") == "Previous College",
+                 "Transferee evaluation profile was not stored independently")
+          expect(call(transferee, "/api/subjects").get("locked") is True,
+                 "Unapproved transferee could choose a schedule")
+
+          # A new student stays locked until a requirement is verified and the
+          # registrar explicitly confirms the official checklist and curriculum.
+          result = call(public, "/api/register", {
+              "name": "Smoke New Student", "email": "newstudent@example.test",
+              "type": "New Student", "password": "newstudent-pass", "programId": "QA"
+          })
+          expect(result.get("ok") is True, "New-student registration failed")
+          student_id = re.search(r"Student ID is ([0-9-]+)", result.get("message", "")).group(1)
+          student = client()
+          result = call(student, "/api/login", {"id": student_id, "password": "newstudent-pass"})
+          expect(result.get("role") == "student", "New-student login failed")
+          expect(call(student, "/api/subjects").get("locked") is True,
+                 "New student was allowed to choose schedules before approval")
+
+          pdf_data = base64.b64encode(b"%PDF-1.4\nEnrollEase CI smoke test\n").decode("ascii")
+          result = call(student, "/api/credentials/upload", {
+              "type": "School ID", "fileName": "smoke.pdf",
+              "contentType": "application/pdf", "data": pdf_data
+          })
+          expect(result.get("ok") is True, "Credential upload failed")
+
+          registrar = client()
+          result = call(registrar, "/api/login", {"id": "registrar1", "password": "staff123"})
+          expect(result.get("role") == "staff", "Seeded registrar login failed")
+          credentials = call(registrar, "/api/staff/credentials")["credentials"]
+          credential = next(item for item in credentials if item["studentId"] == student_id)
+          result = call(registrar, "/api/staff/credentials/review", {
+              "id": credential["id"], "status": "Verified", "notes": "CI smoke verification"
+          })
+          expect(result.get("ok") is True, "Registrar credential review failed")
+
+          applications = call(registrar, "/api/staff/applications")["applications"]
+          application = next(item for item in applications if item["studentId"] == student_id)
+          result = call(registrar, "/api/staff/application/review", {
+              "studentId": student_id, "status": "APPROVED", "programId": "QA",
+              "curriculumId": curriculum_id, "requirementsConfirmed": "true",
+              "notes": "Official checklist confirmation in disposable smoke database"
+          })
+          expect(result.get("ok") is True, "Registrar application approval failed")
+          student_status = call(student, "/api/application/status")["application"]
+          expect(student_status.get("status") == "APPROVED",
+                 "Approved application status was not persisted")
+          catalog = call(student, "/api/subjects")
+          expect(not catalog.get("locked") and len(catalog.get("subjects", [])) == 2,
+                 "Approved student did not receive the assigned curriculum offerings")
+
+          qa101 = next(item for item in catalog["subjects"] if item["code"] == "QA 101")
+          qa102 = next(item for item in catalog["subjects"] if item["code"] == "QA 102")
+          expect(qa101["lectureUnits"] == 3 and qa101["labUnits"] == 1
+                 and qa101["maximumStudents"] == 25,
+                 "Lecture/laboratory units or section capacity were not returned")
+          result = call(student, "/api/select", {"offeringId": qa101["offeringId"]})
+          expect(result.get("ok") is True, "Section selection failed")
+          selected = call(student, "/api/selected")
+          timetable_cells = [cell for row in selected["timetable"] for cell in row["cells"]]
+          expect(timetable_cells.count("QA 101") >= 2,
+                 "Lecture and laboratory meetings were not both placed on the timetable")
+          conflict = call(student, "/api/select", {"offeringId": qa102["offeringId"]})
+          expect(conflict.get("ok") is False and "Schedule conflict" in conflict.get("message", ""),
+                 "Laboratory timetable conflict was not detected")
+
+          result = call(student, "/api/submit", {})
+          expect(result.get("ok") is True, "Enrollment submission failed")
+          records = call(registrar, "/api/staff/enrollments")["records"]
+          record = next(item for item in records if item["studentId"] == student_id)
+          result = call(registrar, "/api/staff/enrollment/review", {
+              "id": record["id"], "status": "Rejected", "notes": "CI release-seat check"
+          })
+          expect(result.get("ok") is True, "Registrar enrollment rejection failed")
+          sections = call(admin, "/api/admin/academic/sections")["sections"]
+          qa101_section = next(item for item in sections if item["code"] == "QA 101")
+          expect(qa101_section["enrolled"] == 0,
+                 "Rejected enrollment did not release the reserved section seat")
+
+          # A cashier is authenticated but does not receive registrar permissions.
+          cashier = client()
+          result = call(cashier, "/api/login", {"id": "cashier1", "password": "staff123"})
+          expect(result.get("role") == "staff", "Cashier staff login failed")
+          expect(call(cashier, "/api/staff/queue").get("nowServing") is not None,
+                 "Cashier queue endpoint failed")
+          print("EnrollEase SQLite/API integration smoke test passed.")
+          PY
+      - name: PostgreSQL migration and API smoke test
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd EnrollEaseJava
+          export DATABASE_URL="jdbc:postgresql://127.0.0.1:5432/enrollease_test"
+          export DATABASE_USER=postgres
+          export DATABASE_PASSWORD=postgres
+          export PORT=18081
+          export ADMIN_USERNAME=smoke-admin
+          export ADMIN_PASSWORD=smoke-admin-password
+          java -jar target/enrollease-1.0.0.jar > "$RUNNER_TEMP/enrollease-postgres.log" 2>&1 &
+          APP_PID=$!
+          trap 'kill "$APP_PID" 2>/dev/null || true' EXIT
+          READY=0
+          for attempt in $(seq 1 30); do
+            if curl -fsS "http://127.0.0.1:$PORT/api/services" >/dev/null; then READY=1; break; fi
+            sleep 1
+          done
+          if [ "$READY" -ne 1 ]; then cat "$RUNNER_TEMP/enrollease-postgres.log"; exit 1; fi
+          python3 - <<'PY'
+          import http.cookiejar
+          import json
+          import urllib.parse
+          import urllib.request
+
+          base = "http://127.0.0.1:18081"
+
+          def opener():
+              return urllib.request.build_opener(
+                  urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar())
+              )
+
+          def call(client, path, values=None):
+              data = None if values is None else urllib.parse.urlencode(values).encode("utf-8")
+              request = urllib.request.Request(base + path, data=data)
+              with client.open(request, timeout=10) as response:
+                  return json.loads(response.read().decode("utf-8"))
+
+          admin = opener()
+          result = call(admin, "/api/login",
+                        {"id": "smoke-admin", "password": "smoke-admin-password"})
+          assert result.get("role") == "admin", "PostgreSQL admin login failed"
+
+          programs = call(admin, "/api/admin/academic/programs").get("programs", [])
+          assert any(program.get("id") == "BSIT" for program in programs),               "PostgreSQL default program seed failed"
+
+          curricula = call(admin, "/api/admin/academic/curricula?programId=BSIT").get("curricula", [])
+          assert any(item.get("id") == "BSIT-2026" for item in curricula),               "PostgreSQL default curriculum seed failed"
+
+          sections = call(admin, "/api/admin/academic/sections").get("sections", [])
+          assert len(sections) >= 5,               "PostgreSQL legacy section migration did not preserve the seeded subjects"
+
+          registrar = opener()
+          result = call(registrar, "/api/login",
+                        {"id": "registrar1", "password": "staff123"})
+          assert result.get("role") == "staff", "PostgreSQL seeded staff login failed"
+          print("EnrollEase PostgreSQL migration/API smoke test passed.")
+          PY

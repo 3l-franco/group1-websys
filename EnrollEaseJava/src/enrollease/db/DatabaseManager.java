@@ -111,6 +111,37 @@ public class DatabaseManager {
                 + "data_base64 TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'Pending Review', "
                 + "admin_notes TEXT NOT NULL DEFAULT '', submitted_at TEXT NOT NULL, "
                 + "reviewed_at TEXT NOT NULL DEFAULT '', reviewed_by TEXT NOT NULL DEFAULT '')");
+            // Academic and section data are additive. Legacy subject/enrollment rows remain intact.
+            st.execute("CREATE TABLE IF NOT EXISTS academic_programs ("
+                + "program_id TEXT PRIMARY KEY, code TEXT NOT NULL UNIQUE, name TEXT NOT NULL, active INTEGER NOT NULL DEFAULT 1)");
+            st.execute("CREATE TABLE IF NOT EXISTS curricula ("
+                + "curriculum_id TEXT PRIMARY KEY, program_id TEXT NOT NULL, name TEXT NOT NULL, "
+                + "effective_year TEXT NOT NULL, active INTEGER NOT NULL DEFAULT 1)");
+            st.execute("CREATE TABLE IF NOT EXISTS student_profiles ("
+                + "student_id TEXT PRIMARY KEY, student_type TEXT NOT NULL, status TEXT NOT NULL, "
+                + "program_id TEXT NOT NULL DEFAULT '', curriculum_id TEXT NOT NULL DEFAULT '', "
+                + "previous_school TEXT NOT NULL DEFAULT '', previous_program TEXT NOT NULL DEFAULT '', "
+                + "admin_notes TEXT NOT NULL DEFAULT '', requirements_confirmed INTEGER NOT NULL DEFAULT 0, "
+                + "created_at BIGINT NOT NULL)");
+            st.execute("CREATE TABLE IF NOT EXISTS course_sections ("
+                + "offering_id TEXT PRIMARY KEY, subject_code TEXT NOT NULL, section_code TEXT NOT NULL, "
+                + "program_id TEXT NOT NULL, curriculum_id TEXT NOT NULL, term TEXT NOT NULL, "
+                + "lecture_units INTEGER NOT NULL DEFAULT 0, lab_units INTEGER NOT NULL DEFAULT 0, "
+                + "min_students INTEGER NOT NULL DEFAULT 0, max_students INTEGER NOT NULL, "
+                + "enrolled_students INTEGER NOT NULL DEFAULT 0, active INTEGER NOT NULL DEFAULT 1)");
+            st.execute("CREATE TABLE IF NOT EXISTS section_schedules ("
+                + "offering_id TEXT NOT NULL, component TEXT NOT NULL, day TEXT NOT NULL, "
+                + "start_min INTEGER NOT NULL, end_min INTEGER NOT NULL, PRIMARY KEY (offering_id, component))");
+            st.execute("CREATE UNIQUE INDEX IF NOT EXISTS ux_course_sections_key "
+                + "ON course_sections(subject_code, section_code, program_id, curriculum_id, term)");
+            st.execute("CREATE INDEX IF NOT EXISTS ix_student_profiles_status ON student_profiles(status)");
+            ensureColumn(st, "enrollment_slip_subjects", "offering_id", "TEXT NOT NULL DEFAULT ''");
+            ensureColumn(st, "enrollment_slip_subjects", "lecture_units", "INTEGER NOT NULL DEFAULT 0");
+            ensureColumn(st, "enrollment_slip_subjects", "lab_units", "INTEGER NOT NULL DEFAULT 0");
+            ensureColumn(st, "enrollment_slip_subjects", "lab_day", "TEXT NOT NULL DEFAULT ''");
+            ensureColumn(st, "enrollment_slip_subjects", "lab_start_min", "INTEGER NOT NULL DEFAULT 0");
+            ensureColumn(st, "enrollment_slip_subjects", "lab_end_min", "INTEGER NOT NULL DEFAULT 0");
+
         } catch (SQLException e) {
             System.out.println("Database error: " + e.getMessage());
             return false;
