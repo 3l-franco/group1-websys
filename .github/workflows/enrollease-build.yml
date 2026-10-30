@@ -59,6 +59,7 @@ jobs:
           import http.cookiejar
           import json
           import re
+          import urllib.error
           import urllib.parse
           import urllib.request
 
@@ -95,6 +96,24 @@ jobs:
           expect(len(legacy_catalog.get("subjects", [])) >= 5,
                  "Legacy subjects were not migrated into section offerings")
 
+          # Previously existing New Student and Transferee demo records must not
+          # inherit the Continuing Student legacy bypass.
+          old_new = client()
+          call(old_new, "/api/login", {"id": "2026-00124", "password": "alex123"})
+          old_new_app = call(old_new, "/api/application/status")["application"]
+          expect(old_new_app.get("status") == "REQUIREMENTS_PENDING",
+                 "Existing New Student account bypassed the requirements review")
+          expect(call(old_new, "/api/subjects").get("locked") is True,
+                 "Existing New Student account could select schedules before approval")
+
+          old_transfer = client()
+          call(old_transfer, "/api/login", {"id": "2026-00125", "password": "jamie123"})
+          old_transfer_app = call(old_transfer, "/api/application/status")["application"]
+          expect(old_transfer_app.get("status") == "ACADEMIC_EVALUATION",
+                 "Existing Transferee account bypassed academic evaluation")
+          expect(call(old_transfer, "/api/subjects").get("locked") is True,
+                 "Existing Transferee account could select schedules before approval")
+
           # Admin account maintenance creates a staff account which must authenticate.
           admin = client()
           result = call(admin, "/api/login",
@@ -110,6 +129,15 @@ jobs:
           expect(result.get("role") == "staff", "Staff Maintenance account could not log in")
           expect(call(clerk, "/api/staff/me").get("position") == "Clerk",
                  "Staff role was not restored in the session")
+          try:
+              call(clerk, "/api/staff/application/review", {
+                  "studentId": "2026-00124", "status": "APPROVED",
+                  "programId": "BSIT", "curriculumId": "BSIT-2026",
+                  "requirementsConfirmed": "true", "notes": "must be denied"
+              })
+              raise AssertionError("Clerk unexpectedly received registrar review permission")
+          except urllib.error.HTTPError as error:
+              expect(error.code == 401, "Clerk review denial returned the wrong HTTP status")
 
           # Add a second program, curriculum, subjects, and separate LEC/LAB offerings.
           result = call(admin, "/api/admin/academic/program",
@@ -144,6 +172,21 @@ jobs:
           # Transferees retain their prior-school data and do not inherit the
           # new-student's hidden intended-program field.
           public = client()
+          parked = call(public, "/api/register", {
+              "name": "Smoke Continuing Student", "email": "continuing@example.test",
+              "type": "Continuing Student", "password": "continuing-pass"
+          })
+          expect(parked.get("ok") is False and "temporarily unavailable" in parked.get("message", ""),
+                 "Continuing-student public registration was not parked")
+
+          admin_parked = call(admin, "/api/admin/add", {
+              "role": "student", "id": "2026-00888", "name": "Parked Continuing",
+              "email": "parked.continuing@example.test", "extra": "Continuing Student",
+              "password": "parked-pass"
+          })
+          expect(admin_parked.get("ok") is False,
+                 "Admin Maintenance bypassed the parked continuing-student workflow")
+
           result = call(public, "/api/register", {
               "name": "Smoke Transferee", "email": "transferee@example.test",
               "type": "Transferee", "password": "transfer-pass", "programId": "QA",
