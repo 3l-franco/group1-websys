@@ -93,6 +93,20 @@ public class CredentialDAO {
         return missing;
     }
 
+    /** Number of documents the registrar has individually verified for this applicant. */
+    public int countVerifiedForStudent(String studentId) {
+        String sql = "SELECT COUNT(*) FROM student_credentials WHERE student_id=? AND status='Verified'";
+        try (PreparedStatement ps = DatabaseManager.getConnection().prepareStatement(sql)) {
+            ps.setString(1, studentId);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? rs.getInt(1) : 0;
+            }
+        } catch (SQLException e) {
+            System.err.println("Could not count verified student requirements: " + e.getMessage());
+            return 0;
+        }
+    }
+
     public boolean review(String id, String status, String notes) {
         String sql = "UPDATE student_credentials SET status=?, admin_notes=?, reviewed_at=?, reviewed_by=? WHERE id=?";
         try (PreparedStatement ps = DatabaseManager.getConnection().prepareStatement(sql)) {

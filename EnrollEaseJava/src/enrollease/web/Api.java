@@ -230,6 +230,8 @@ public class Api {
         String type = param(p, "type").trim();
         String password = param(p, "password");
         String programId = param(p, "programId").trim();
+        // A transferee's program/curriculum must be assigned by the registrar after evaluation.
+        if ("Transferee".equals(type)) programId = "";
         String previousSchool = param(p, "previousSchool").trim();
         String previousProgram = param(p, "previousProgram").trim();
         if (Validator.isBlank(name) || !Validator.isValidEmail(email) || !Validator.isValidPassword(password)) {
