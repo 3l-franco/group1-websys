@@ -75,9 +75,9 @@ public class StudentSession {
         return "Available";
     }
 
-    public String select(String code) {
-        Subject s = catalog.find(code);
-        if (s == null) return "Subject not found.";
+    public String select(String offeringId) {
+        Subject s = catalog.findOffering(offeringId);
+        if (s == null) return "Section offering not found. Refresh the subject list and try again.";
         if (ticket != null) return "Your enrollment was already submitted.";
         if (selected.contains(s)) return s.getCode() + " is already selected.";
         if (lockedCodes.contains(s.getCode())) return s.getCode() + " is " + statusOf(s) + ".";
@@ -95,10 +95,13 @@ public class StudentSession {
         return null;
     }
 
-    public String remove(String code) {
-        Subject s = catalog.find(code);
+    public String remove(String offeringId) {
+        Subject s = null;
+        for (Subject selectedSubject : selected) {
+            if (selectedSubject.getOfferingId().equals(offeringId)) { s = selectedSubject; break; }
+        }
         if (ticket != null) return "Your enrollment was already submitted.";
-        if (s == null || !selected.remove(s)) return "That subject is not in your selected list.";
+        if (s == null || !selected.remove(s)) return "That section is not in your selected list.";
         timetable.remove(s);
         units -= s.getUnits();
         return null;
@@ -123,6 +126,20 @@ public class StudentSession {
 
     public ArrayList<EnrollmentSlip> getSavedSlips() {
         return enrollmentDao.getByStudentId(student.getId());
+    }
+
+    /** Allows a student to prepare a corrected submission after the registrar rejects the previous one. */
+    public synchronized void refreshAfterRejection() {
+        ArrayList<EnrollmentSlip> saved = enrollmentDao.getByStudentId(student.getId());
+        if (saved.isEmpty()) return;
+        EnrollmentSlip latest = saved.get(saved.size() - 1);
+        if (ticket != null && ticket.getNumber() == latest.getQueueNumber() && "Rejected".equals(latest.getStatus())) {
+            ticket = null;
+            selected = new MyLinkedList<Subject>();
+            timetable = new Timetable();
+            units = 0;
+            cashierRunning = false;
+        }
     }
 
     // ---------------- payment queue ----------------

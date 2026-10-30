@@ -63,17 +63,37 @@ $(function () {
         if ($("#remember").is(":checked")) localStorage.setItem("enrolleaseRememberId", id);
         else localStorage.removeItem("enrolleaseRememberId");
       } catch (e) { }
-      window.location.href = r.role === "admin" ? "admin.html" : "enrollment.html";
+      window.location.href = r.role === "admin" ? "admin.html" : (r.role === "staff" ? "staff.html" : "enrollment.html");
     });
   });
+  var loadRegistrationPrograms = function () {
+    if (!$("#requestedProgram").length) return;
+    call("GET", "api/programs").then(function (r) {
+      var html = '<option value="">Choose your intended program</option>';
+      (r.programs || []).forEach(function (program) { html += '<option value="' + esc(program.id) + '">' + esc(program.code + " - " + program.name) + '</option>'; });
+      $("#requestedProgram").html(html);
+    });
+  };
+  var toggleRegistrationType = function () {
+    var transferee = $("#studentType").val() === "Transferee";
+    $("#transfereeFields").toggleClass("d-none", !transferee);
+    $("#requestedProgramWrap").toggleClass("d-none", transferee);
+    $("#previousSchool, #previousProgram").prop("required", transferee);
+    $("#requestedProgram").prop("required", !transferee);
+  };
+  loadRegistrationPrograms();
+  $("#studentType").on("change", toggleRegistrationType);
+  toggleRegistrationType();
   $("#registerForm").on("submit", function (e) {
     e.preventDefault();
     var form = this, box = $("#regAlert");
-    call("POST", "api/register", { name: $("#fullName").val(), email: $("#email").val(), type: $("#studentType").val(), password: $("#regPass").val() })
-      .then(function (r) {
-        if (r.ok) { box.removeClass("d-none alert-danger").addClass("alert-success").text(r.message); form.reset(); }
-        else { box.removeClass("d-none alert-success").addClass("alert-danger").text(r.message); }
-      });
+    call("POST", "api/register", {
+      name: $("#fullName").val(), email: $("#email").val(), type: $("#studentType").val(), password: $("#regPass").val(),
+      programId: $("#requestedProgram").val(), previousSchool: $("#previousSchool").val(), previousProgram: $("#previousProgram").val()
+    }).then(function (r) {
+      if (r.ok) { box.removeClass("d-none alert-danger").addClass("alert-success").text(r.message); form.reset(); toggleRegistrationType(); }
+      else { box.removeClass("d-none alert-success").addClass("alert-danger").text(r.message); }
+    });
   });
 
   // Contact (the server checks every field again)
@@ -153,21 +173,23 @@ $(function () {
   // ---------- pages that need a logged-in user ----------
   call("GET", "api/me").then(function (me) {
     if (me.loggedIn) {
-      if (me.role === "admin") {
-        var $adminLink = $('.navbar .navbar-nav a.nav-link[href="enrollment.html"]');
-        if ($adminLink.length) {
-          $adminLink.text("Admin Maintenance").attr("href", "admin.html");
-          if ($("#adminPage").length) $adminLink.addClass("active");
-        }
+      var destination = me.role === "admin" ? "admin.html" : (me.role === "staff" ? "staff.html" : "enrollment.html");
+      var $pageLink = $('.navbar .navbar-nav a.nav-link[href="enrollment.html"]');
+      if ($pageLink.length && me.role !== "student") {
+        $pageLink.text(me.role === "admin" ? "Admin Maintenance" : "Staff Workspace").attr("href", destination);
       }
       $('a.nav-link[href="login.html"]').text("Logout (" + me.name + ")").attr("href", "#").on("click", logout);
     }
     if ($("#adminPage").length) {
-      if (me.role !== "admin") { window.location.href = me.role === "student" ? "enrollment.html" : "login.html"; return; }
+      if (me.role !== "admin") { window.location.href = me.role === "student" ? "enrollment.html" : (me.role === "staff" ? "staff.html" : "login.html"); return; }
       startAdmin();
     }
+    if ($("#staffPage").length) {
+      if (me.role !== "staff") { window.location.href = me.role === "admin" ? "admin.html" : (me.role === "student" ? "enrollment.html" : "login.html"); return; }
+      startStaff(me);
+    }
     if ($("#submitEnroll").length) {
-      if (me.role !== "student") { window.location.href = me.role === "admin" ? "admin.html" : "login.html"; return; }
+      if (me.role !== "student") { window.location.href = me.role === "admin" ? "admin.html" : (me.role === "staff" ? "staff.html" : "login.html"); return; }
       startEnrollment();
     }
   });
@@ -306,9 +328,151 @@ $(function () {
         } catch (err) { preview.close(); flash("This document could not be previewed in the browser.", true); }
       });
     });
-    loadEnrollments(); loadCredentials();
+    var renderApplications = function () {
+      call("GET", "api/admin/applications").then(function (r) {
+        if (!r.applications) { $("#applicationRecords").html('<div class="alert alert-warning">' + esc(r.message || "Applications could not be loaded.") + '</div>'); return; }
+        if (!r.applications.length) { $("#applicationRecords").html('<p class="text-muted">No pending student applications.</p>'); return; }
+        call("GET", "api/admin/academic/programs").then(function (programResult) {
+          var programs = programResult.programs || [], html = '<table class="table table-bordered align-middle bg-white"><thead><tr><th>Applicant</th><th>Classification / Previous studies</th><th>Program & curriculum</th><th>Application status</th><th>Registrar remarks</th></tr></thead><tbody>';
+          r.applications.forEach(function (app, index) {
+            var programOptions = programs.map(function (v) { return '<option value="' + esc(v.id) + '"' + (v.id === app.programId ? ' selected' : '') + '>' + esc(v.code + " - " + v.name) + '</option>'; }).join("");
+            html += '<tr><td><strong>' + esc(app.studentName) + '</strong><div class="small text-secondary">' + esc(app.studentId) + ' · ' + esc(app.email) + '</div></td><td>' + esc(app.studentType) + (app.studentType === "Transferee" ? '<div class="small text-secondary">Previous school: ' + esc(app.previousSchool) + '<br>Previous program: ' + esc(app.previousProgram) + '</div>' : '') + '</td><td style="min-width:210px"><select class="form-select form-select-sm mb-2" data-app-program="' + esc(app.studentId) + '">' + programOptions + '</select><select class="form-select form-select-sm" data-app-curriculum="' + esc(app.studentId) + '"><option value="">Loading curricula...</option></select></td><td style="min-width:175px"><select class="form-select form-select-sm" data-app-status="' + esc(app.studentId) + '">' + statusOptions(["REQUIREMENTS_PENDING","ACADEMIC_EVALUATION","APPROVED","REJECTED"], app.status) + '</select></td><td style="min-width:210px"><input class="form-control form-control-sm mb-2" maxlength="1000" data-app-notes="' + esc(app.studentId) + '" placeholder="Evaluation / requirements remarks" value="' + esc(app.adminNotes) + '"><button class="btn btn-sm btn-primary" type="button" data-save-application="' + esc(app.studentId) + '">Save application</button></td></tr>';
+          });
+          $("#applicationRecords").html(html + '</tbody></table>');
+          r.applications.forEach(function (app) {
+            var id = app.studentId, selectedProgram = app.programId || $('[data-app-program="' + id + '"] option:first').val();
+            call("GET", "api/admin/academic/curricula", { programId: selectedProgram }).then(function (cr) {
+              var options = '<option value="">Choose curriculum</option>';
+              (cr.curricula || []).forEach(function (c) { options += '<option value="' + esc(c.id) + '"' + (c.id === app.curriculumId ? ' selected' : '') + '>' + esc(c.name + " · " + c.effectiveYear) + '</option>'; });
+              $('[data-app-curriculum="' + id + '"]').html(options);
+            });
+          });
+        });
+      });
+    };
+    var loadAcademicSetup = function () {
+      call("GET", "api/admin/academic/programs").then(function (r) {
+        var options = (r.programs || []).map(function (p) { return '<option value="' + esc(p.id) + '">' + esc(p.code + " - " + p.name) + '</option>'; }).join("");
+        $("#curriculumProgram, #sectionProgram").html(options);
+        var programId = $("#sectionProgram").val() || (r.programs && r.programs.length ? r.programs[0].id : "");
+        loadAcademicCurricula(programId);
+      });
+      call("GET", "api/admin/academic/subjects").then(function (r) {
+        var html = (r.subjects || []).map(function (v) { return '<option value="' + esc(v.code) + '">' + esc(v.code + " - " + v.title) + '</option>'; }).join("");
+        $("#sectionSubject").html(html);
+      });
+      call("GET", "api/admin/academic/sections").then(function (r) {
+        var html = '<table class="table table-bordered bg-white"><thead><tr><th>Subject</th><th>Section</th><th>Program</th><th>Lec/Lab</th><th>Minimum</th><th>Maximum</th><th>Enrolled</th><th>Remaining</th><th>Action</th></tr></thead><tbody>';
+        (r.sections || []).forEach(function (v) { html += '<tr><td>' + esc(v.code + " - " + v.title) + '</td><td>' + esc(v.section) + '</td><td>' + esc(v.programId) + '</td><td>' + v.lectureUnits + ' / ' + v.labUnits + '</td><td><input class="form-control form-control-sm" type="number" min="0" data-capacity-min="' + esc(v.id) + '" value="' + v.minimum + '"></td><td><input class="form-control form-control-sm" type="number" min="1" data-capacity-max="' + esc(v.id) + '" value="' + v.maximum + '"></td><td>' + v.enrolled + '</td><td>' + Math.max(0, v.maximum-v.enrolled) + '</td><td><button class="btn btn-sm btn-primary" data-save-capacity="' + esc(v.id) + '">Save</button></td></tr>'; });
+        $("#academicSections").html(html + '</tbody></table>');
+      });
+    };
+    var loadAcademicCurricula = function (programId) {
+      call("GET", "api/admin/academic/curricula", { programId: programId }).then(function (r) {
+        var options = (r.curricula || []).map(function (c) { return '<option value="' + esc(c.id) + '">' + esc(c.name + " · " + c.effectiveYear) + '</option>'; }).join("");
+        $("#sectionCurriculum").html(options);
+      });
+    };
+    $("#sectionProgram").on("change", function () { loadAcademicCurricula($(this).val()); });
+    $(document).on("click", "[data-save-capacity]", function () {
+      var id=$(this).attr("data-save-capacity");
+      call("POST","api/admin/academic/section/capacity",{offeringId:id,minimum:$('[data-capacity-min="'+id+'"]').val(),maximum:$('[data-capacity-max="'+id+'"]').val()}).then(function(r){$("#academicMsg").html('<div class="alert alert-'+(r.ok?"success":"danger")+'">'+esc(r.message)+'</div>');if(r.ok)loadAcademicSetup();});
+    });
+    $("#programForm").on("submit", function (e) { e.preventDefault(); call("POST", "api/admin/academic/program", { code: $("#programCode").val(), name: $("#programName").val() }).then(function (r) { $("#academicMsg").html('<div class="alert alert-' + (r.ok ? "success" : "danger") + '">' + esc(r.message) + '</div>'); if (r.ok) { this.reset(); loadAcademicSetup(); renderApplications(); } }.bind(this)); });
+    $("#curriculumForm").on("submit", function (e) { e.preventDefault(); call("POST", "api/admin/academic/curriculum", { programId: $("#curriculumProgram").val(), name: $("#curriculumName").val(), effectiveYear: $("#curriculumYear").val() }).then(function (r) { $("#academicMsg").html('<div class="alert alert-' + (r.ok ? "success" : "danger") + '">' + esc(r.message) + '</div>'); if (r.ok) { this.reset(); loadAcademicSetup(); renderApplications(); } }.bind(this)); });
+    $("#academicSubjectForm").on("submit", function (e) { e.preventDefault(); call("POST", "api/admin/academic/subject", { code: $("#academicSubjectCode").val(), title: $("#academicSubjectTitle").val(), prerequisites: $("#academicPrerequisites").val() }).then(function (r) { $("#academicMsg").html('<div class="alert alert-' + (r.ok ? "success" : "danger") + '">' + esc(r.message) + '</div>'); if (r.ok) { this.reset(); loadAcademicSetup(); } }.bind(this)); });
+    $("#sectionForm").on("submit", function (e) { e.preventDefault(); call("POST", "api/admin/academic/section", { subjectCode: $("#sectionSubject").val(), programId: $("#sectionProgram").val(), curriculumId: $("#sectionCurriculum").val(), section: $("#sectionName").val(), lectureUnits: $("#lecUnits").val(), labUnits: $("#labUnits").val(), minimum: $("#minStudents").val(), maximum: $("#maxStudents").val(), lectureDay: $("#lecDay").val(), lectureStart: $("#lecStart").val(), lectureEnd: $("#lecEnd").val(), labDay: $("#labDay").val(), labStart: $("#labStart").val(), labEnd: $("#labEnd").val() }).then(function (r) { $("#academicMsg").html('<div class="alert alert-' + (r.ok ? "success" : "danger") + '">' + esc(r.message) + '</div>'); if (r.ok) { this.reset(); loadAcademicSetup(); } }.bind(this)); });
+    $(document).on("change", "[data-app-program]", function () {
+      var id = $(this).attr("data-app-program");
+      call("GET", "api/admin/academic/curricula", { programId: $(this).val() }).then(function (r) {
+        var html = '<option value="">Choose curriculum</option>';
+        (r.curricula || []).forEach(function (c) { html += '<option value="' + esc(c.id) + '">' + esc(c.name + " · " + c.effectiveYear) + '</option>'; });
+        $('[data-app-curriculum="' + id + '"]').html(html);
+      });
+    });
+    $(document).on("click", "[data-save-application]", function () {
+      var id = $(this).attr("data-save-application");
+      call("POST", "api/admin/application/review", { studentId: id, status: $('[data-app-status="' + id + '"]').val(), programId: $('[data-app-program="' + id + '"]').val(), curriculumId: $('[data-app-curriculum="' + id + '"]').val(), notes: $('[data-app-notes="' + id + '"]').val() }).then(function (r) { flash(r.message, !r.ok); renderApplications(); });
+    });
+    loadEnrollments(); loadCredentials(); renderApplications(); loadAcademicSetup();
 
     load();
+  }
+
+  // =================== STAFF WORKSPACE ===================
+  function startStaff(me) {
+    var position = me.position || "";
+    $("#staffName").text(me.name || ""); $("#staffPosition").text(position);
+    var canRegistrar = position === "Registrar" || position === "Administrator" || position === "Clerk";
+    var canReview = position === "Registrar" || position === "Administrator";
+    var canCashier = position === "Cashier" || position === "Administrator";
+    if (!canRegistrar) $('[data-role-panel="registrar"]').addClass("d-none");
+    if (!canCashier) $('[data-role-panel="cashier"]').addClass("d-none");
+    if (!canRegistrar && canCashier) bootstrap.Tab.getOrCreateInstance($('[data-bs-target="#staffQueue"]')[0]).show();
+    var flashStaff = function (message, bad) { $("#staffMsg").html('<div class="alert alert-' + (bad ? "danger" : "success") + '">' + esc(message) + '</div>'); };
+    var staffStatusOptions = function (items, selected) { return items.map(function (value) { return '<option' + (value === selected ? ' selected' : '') + '>' + esc(value) + '</option>'; }).join(""); };
+    var renderStaffApplications = function () {
+      call("GET", "api/staff/applications").then(function (r) {
+        if (!r.applications) { $("#staffApplicationsList").html('<p class="text-muted">' + esc(r.message || "No access.") + '</p>'); return; }
+        if (!r.applications.length) { $("#staffApplicationsList").html('<p class="text-muted">No pending applications.</p>'); return; }
+        call("GET", "api/programs").then(function (pr) {
+          var html = '<table class="table table-bordered bg-white"><thead><tr><th>Applicant</th><th>Classification / Previous studies</th><th>Program & curriculum</th><th>Status</th><th>Remarks</th></tr></thead><tbody>';
+          r.applications.forEach(function (a) {
+            var opts = (pr.programs || []).map(function (p) { return '<option value="' + esc(p.id) + '"' + (p.id === a.programId ? ' selected' : '') + '>' + esc(p.code + " - " + p.name) + '</option>'; }).join("");
+            html += '<tr><td>' + esc(a.studentName) + '<div class="small text-secondary">' + esc(a.studentId) + '</div></td><td>' + esc(a.studentType) + (a.studentType === "Transferee" ? '<div class="small text-secondary">' + esc(a.previousSchool) + ' · ' + esc(a.previousProgram) + '</div>' : '') + '</td><td style="min-width:190px"><select class="form-select form-select-sm mb-2" data-staff-program="' + esc(a.studentId) + '">' + opts + '</select><select class="form-select form-select-sm" data-staff-curr="' + esc(a.studentId) + '"><option value="">Choose curriculum</option></select></td><td><select class="form-select form-select-sm" data-staff-status="' + esc(a.studentId) + '">' + staffStatusOptions(["REQUIREMENTS_PENDING","ACADEMIC_EVALUATION","APPROVED","REJECTED"], a.status) + '</select></td><td style="min-width:200px"><input class="form-control form-control-sm mb-2" data-staff-notes="' + esc(a.studentId) + '" value="' + esc(a.adminNotes) + '"><button class="btn btn-sm btn-primary" type="button" data-staff-save-app="' + esc(a.studentId) + '">Save</button></td></tr>';
+          });
+          $("#staffApplicationsList").html(html + '</tbody></table>');
+        if (!canReview) $("#staffApplicationsList select, #staffApplicationsList input, #staffApplicationsList button").prop("disabled", true);
+          r.applications.forEach(function (a) {
+            var id = a.studentId, prog = a.programId || $('[data-staff-program="' + id + '"] option:first').val();
+            call("GET", "api/curricula", { programId: prog }).then(function (cr) {
+              var opts = '<option value="">Choose curriculum</option>';
+              (cr.curricula || []).forEach(function (c) { opts += '<option value="' + esc(c.id) + '"' + (c.id === a.curriculumId ? ' selected' : '') + '>' + esc(c.name + " · " + c.effectiveYear) + '</option>'; });
+              $('[data-staff-curr="' + id + '"]').html(opts);
+            });
+          });
+        });
+      });
+    };
+    var renderStaffCredentials = function () {
+      call("GET", "api/staff/credentials").then(function (r) {
+        if (!r.credentials) { $("#staffCredentialsList").html('<p class="text-muted">' + esc(r.message || "No access.") + '</p>'); return; }
+        var html = '<table class="table table-bordered bg-white"><thead><tr><th>Student</th><th>Document</th><th>Status</th><th>Remarks</th></tr></thead><tbody>';
+        (r.credentials || []).forEach(function (c) { html += '<tr><td>' + esc(c.studentName) + '<div class="small text-secondary">' + esc(c.studentId) + '</div></td><td>' + esc(c.type) + '<br><button class="btn btn-sm btn-outline-primary mt-1" data-staff-view-doc="' + esc(c.id) + '">View ' + esc(c.fileName) + '</button></td><td><select class="form-select form-select-sm" data-staff-cred-status="' + esc(c.id) + '">' + staffStatusOptions(["Pending Review","Verified","Needs Resubmission","Rejected"],c.status) + '</select></td><td><input class="form-control form-control-sm mb-2" data-staff-cred-note="' + esc(c.id) + '" value="' + esc(c.adminNotes) + '"><button class="btn btn-sm btn-primary" data-staff-save-cred="' + esc(c.id) + '">Save review</button></td></tr>'; });
+        $("#staffCredentialsList").html(html + '</tbody></table>');
+        if (!canReview) $("#staffCredentialsList select, #staffCredentialsList input, [data-staff-save-cred]").prop("disabled", true);
+      });
+    };
+    var renderStaffEnrollments = function () {
+      call("GET", "api/staff/enrollments").then(function (r) {
+        if (!r.records) { $("#staffEnrollmentList").html('<p class="text-muted">' + esc(r.message || "No access.") + '</p>'); return; }
+        var html = '<table class="table table-bordered bg-white"><thead><tr><th>Student</th><th>Submitted</th><th>Subjects</th><th>Units</th><th>Status</th></tr></thead><tbody>';
+        (r.records || []).forEach(function (v) { var subs=(v.subjects||[]).map(function(x){return esc(x.code+" "+x.title+" ("+x.lectureUnits+" Lec / "+x.labUnits+" Lab)")+" · "+esc(x.schedule);}).join("<br>"); html += '<tr><td>' + esc(v.studentName) + '<div class="small text-secondary">' + esc(v.studentId) + '</div></td><td>' + esc(v.submittedAt) + '</td><td>' + subs + '</td><td>' + v.totalUnits + '</td><td><select class="form-select form-select-sm mb-2" data-staff-enroll-status="' + esc(v.id) + '">' + staffStatusOptions(["Pending Review","Requirements Incomplete","Approved","Rejected"],v.status) + '</select><input class="form-control form-control-sm mb-2" data-staff-enroll-note="' + esc(v.id) + '" value="' + esc(v.adminNotes) + '"><button class="btn btn-sm btn-primary" data-staff-save-enroll="' + esc(v.id) + '">Save</button></td></tr>'; });
+        $("#staffEnrollmentList").html(html + '</tbody></table>');
+        if (!canReview) $("#staffEnrollmentList select, #staffEnrollmentList input, [data-staff-save-enroll]").prop("disabled", true);
+      });
+    };
+    $(document).on("change", "[data-staff-program]", function () {
+      var id=$(this).attr("data-staff-program"); call("GET","api/curricula",{programId:$(this).val()}).then(function(r){var h='<option value="">Choose curriculum</option>';(r.curricula||[]).forEach(function(c){h+='<option value="'+esc(c.id)+'">'+esc(c.name+" · "+c.effectiveYear)+'</option>';}); $('[data-staff-curr="'+id+'"]').html(h);});
+    });
+    $(document).on("click", "[data-staff-save-app]", function () {
+      var id=$(this).attr("data-staff-save-app"); call("POST","api/staff/application/review",{studentId:id,status:$('[data-staff-status="'+id+'"]').val(),programId:$('[data-staff-program="'+id+'"]').val(),curriculumId:$('[data-staff-curr="'+id+'"]').val(),notes:$('[data-staff-notes="'+id+'"]').val()}).then(function(r){flashStaff(r.message,!r.ok);renderStaffApplications();});
+    });
+    $(document).on("click", "[data-staff-save-cred]", function () {
+      var id=$(this).attr("data-staff-save-cred");
+      call("POST","api/staff/credentials/review",{id:id,status:$('[data-staff-cred-status="'+id+'"]').val(),notes:$('[data-staff-cred-note="'+id+'"]').val()}).then(function(r){flashStaff(r.message,!r.ok);renderStaffCredentials();});
+    });
+    $(document).on("click", "[data-staff-save-enroll]", function () {
+      var id=$(this).attr("data-staff-save-enroll");
+      call("POST","api/staff/enrollment/review",{id:id,status:$('[data-staff-enroll-status="'+id+'"]').val(),notes:$('[data-staff-enroll-note="'+id+'"]').val()}).then(function(r){flashStaff(r.message,!r.ok);renderStaffEnrollments();});
+    });
+    $(document).on("click", "[data-staff-view-doc]", function () {
+      var id=$(this).attr("data-staff-view-doc"), win=window.open("about:blank","_blank"); if(!win){flashStaff("Allow pop-ups to preview documents.",true);return;}
+      call("GET","api/staff/credentials/file",{id:id}).then(function(r){if(!r.ok){win.close();flashStaff(r.message,true);return;}var bytes=atob(r.data),nums=new Uint8Array(bytes.length);for(var i=0;i<bytes.length;i++)nums[i]=bytes.charCodeAt(i);win.location.href=URL.createObjectURL(new Blob([nums],{type:r.contentType}));});
+    });
+    $("#staffCallNext").on("click", function () { call("POST","api/staff/queue/next").then(function(r){if(!r.ok){flashStaff(r.message,true);return;}$("#staffNowServing").text(r.nowServing);}); });
+    if (canRegistrar) { renderStaffApplications(); renderStaffCredentials(); renderStaffEnrollments(); }
+    if (canCashier) call("GET","api/staff/queue").then(function(r){$("#staffNowServing").text(r.nowServing || "-");});
   }
 
   // =================== ENROLLMENT ===================
@@ -319,6 +483,8 @@ $(function () {
     loadSubjects = function () {
       call("GET", "api/subjects").then(function (r) {
         if (r.auth === false) { window.location.href = "login.html"; return; }
+        if (r.locked) { $("#applicationStatus").text(r.message).removeClass("alert-success").addClass("alert-warning"); $("#enrollmentWorkspace").addClass("d-none"); return; }
+        $("#academicAssignment").text("Assigned program and curriculum: " + r.programId + " · " + r.curriculumId);
         $("#termLine").text(r.term);
         $("#maxUnits").text(r.maxUnits); $("#selectedUnits").text(r.units);
         $("#noticeText").html(r.notice ? esc(r.notice) : "No failed subjects. Everything is open to you.");
@@ -326,8 +492,8 @@ $(function () {
         r.subjects.forEach(function (s) {
           var picked = s.status === "Selected", blocked = (s.status !== "Available" && !picked) || r.submitted;
           var badge = (s.status === "Available" || picked) ? "success" : "danger";
-          html += "<tr><td>" + esc(s.code) + "</td><td>" + esc(s.title) + "</td><td>" + s.units + "</td><td>" + esc(s.section) + "</td><td>" + esc(s.schedule) + "</td><td>" + s.slots +
-            '</td><td><span class="badge text-bg-' + badge + '">' + esc(s.status) + '</span></td><td><input class="form-check-input subj" type="checkbox" aria-label="Select ' + esc(s.code) + ' ' + esc(s.title) + '" data-code="' + esc(s.code) + '"' +
+          html += "<tr><td>" + esc(s.code) + "</td><td>" + esc(s.title) + "</td><td>" + s.lectureUnits + "</td><td>" + s.labUnits + "</td><td>" + s.units + "</td><td>" + esc(s.section) + "</td><td>" + esc(s.schedule) + "</td><td>" + s.minimumStudents + "</td><td>" + s.maximumStudents + "</td><td>" + s.enrolledStudents + "</td><td>" + s.slots +
+            '</td><td><span class="badge text-bg-' + (s.status === "Full" ? "danger" : (s.sectionStatus === "Below minimum" ? "warning" : badge)) + '">' + esc(s.status === "Available" ? s.sectionStatus : s.status) + '</span></td><td><input class="form-check-input subj" type="checkbox" aria-label="Select ' + esc(s.code) + ' ' + esc(s.title) + ' section ' + esc(s.section) + '" data-offering-id="' + esc(s.offeringId) + '"' +
             (picked ? " checked" : "") + (blocked ? " disabled" : "") + "></td></tr>";
         });
         $("#subjectRows").html(html);
@@ -377,7 +543,7 @@ $(function () {
 
     $(document).on("change", ".subj", function () {
       var box = $(this), url = box.is(":checked") ? "api/select" : "api/remove";
-      call("POST", url, { code: box.data("code") }).then(function (r) {
+      call("POST", url, { offeringId: box.attr("data-offering-id") }).then(function (r) {
         showMsg(r.message, r.ok ? "success" : "danger");
         loadSubjects(); loadSelected();
       });
@@ -434,6 +600,25 @@ $(function () {
       reader.readAsDataURL(file);
     });
 
-    loadSubjects(); loadSelected(); loadQueue(); loadSlips(); loadStudentCredentials();
+    call("GET", "api/application/status").then(function (r) {
+      var app = r.application || {}, status = app.status || "APPLICATION_NOT_FOUND";
+      var messages = {
+        REQUIREMENTS_PENDING: "Your documents are awaiting registrar verification. Schedule selection is locked until approval.",
+        ACADEMIC_EVALUATION: "Your transferee application is awaiting curriculum evaluation. Schedule selection is locked until the registrar assigns and approves your academic profile.",
+        REJECTED: "Your application was not approved. Please review the registrar remarks and contact the registrar's office.",
+        APPROVED: "Your requirements and academic profile are approved. You may proceed with subject and schedule selection."
+      };
+      $("#applicationStatus").text(messages[status] || "Your application status is being checked by the registrar.")
+        .toggleClass("alert-success", status === "APPROVED")
+        .toggleClass("alert-warning", status !== "APPROVED");
+      if (app.adminNotes) $("#applicationStatus").append(document.createTextNode(" Registrar remarks: " + app.adminNotes));
+      if (status === "APPROVED" && app.programId && app.curriculumId) {
+        $("#enrollmentWorkspace").removeClass("d-none");
+        loadSubjects(); loadSelected(); loadQueue(); loadSlips();
+      } else {
+        $("#enrollmentWorkspace").addClass("d-none");
+      }
+    });
+    loadStudentCredentials();
   }
 });

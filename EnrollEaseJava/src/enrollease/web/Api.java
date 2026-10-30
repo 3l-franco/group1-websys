@@ -56,6 +56,8 @@ public class Api {
     private QueueManager queueManager = new QueueManager();
     private EnrollmentDAO enrollmentDao = new EnrollmentDAO();
     private CredentialDAO credentialDao = new CredentialDAO();
+    private StudentProfileDAO profileDao = new StudentProfileDAO();
+    private AcademicDAO academicDao = new AcademicDAO();
     private MyStack<Person> deletedStack = new MyStack<Person>();      // for "Undo last delete"
     private Map<String, Session> sessions = new HashMap<String, Session>();
 
@@ -80,9 +82,12 @@ public class Api {
     };
 
     private static final List<String> STUDENT_KEYS = Arrays.asList(
-        "GET /api/subjects", "GET /api/subjects/search", "POST /api/select", "POST /api/remove",
+        "GET /api/application/status", "GET /api/subjects", "GET /api/subjects/search", "POST /api/select", "POST /api/remove",
         "GET /api/selected", "POST /api/submit", "GET /api/queue", "POST /api/queue/next",
         "POST /api/queue/cashier", "GET /api/slips", "GET /api/credentials", "POST /api/credentials/upload");
+    private static final List<String> ENROLLMENT_KEYS = Arrays.asList(
+        "GET /api/subjects", "GET /api/subjects/search", "POST /api/select", "POST /api/remove",
+        "GET /api/selected", "POST /api/submit");
 
     // =====================================================================
     //  Entry point: called by WebApp for every /api/... request
@@ -122,7 +127,14 @@ public class Api {
             case "POST /api/contact": return contact(p);
             case "GET /api/services": return services(p);
             case "GET /api/calendar": return calendar(p);
+            case "GET /api/programs": return ok("programs", academicDao.getPrograms());
+            case "GET /api/curricula": return ok("curricula", academicDao.getCurricula(param(p, "programId")));
             default: break;
+        }
+
+        if (key.contains(" /api/staff/")) {
+            if (session == null || !(session.user instanceof Staff)) return unauthorized();
+            return staffRoute(key, p, (Staff) session.user);
         }
 
         if (key.contains(" /api/admin/")) {
@@ -135,6 +147,11 @@ public class Api {
         if (STUDENT_KEYS.contains(key)) {
             if (session == null || session.student == null) {
                 return unauthorized();
+            }
+            if (ENROLLMENT_KEYS.contains(key) && !profileDao.canEnroll(session.student.getStudent().getId())) {
+                Map<String, Object> locked = fail("Enrollment is locked until your requirements and academic profile are approved by the registrar.");
+                locked.put("locked", true);
+                return locked;
             }
             return studentRoute(key, p, session.student);
         }
@@ -152,8 +169,9 @@ public class Api {
         if (session == null) {
             return Json.map("loggedIn", false);
         }
-        String role = (session.user instanceof Admin) ? "admin" : "student";
-        return Json.map("loggedIn", true, "role", role, "name", session.user.getName(), "id", session.user.getId());
+        String role = (session.user instanceof Admin) ? "admin" : (session.user instanceof Staff ? "staff" : "student");
+        return Json.map("loggedIn", true, "role", role, "name", session.user.getName(), "id", session.user.getId(),
+                "position", session.user instanceof Staff ? session.user.getExtra() : "");
     }
 
     private Map<String, Object> login(HttpExchange ex, Map<String, String> p) {
@@ -174,11 +192,14 @@ public class Api {
             session.user = new Admin();
         } else {
             Student student = accountDao.login(id, password);
-            if (student == null) {
-                return fail("Student ID or password is incorrect.");
+            if (student != null) {
+                session.user = student;
+                session.student = new StudentSession(student, catalog, queueManager, enrollmentDao);
+            } else {
+                Staff staff = accountDao.loginStaff(id, password);
+                if (staff == null) return fail("Student ID, staff username, or password is incorrect.");
+                session.user = staff;
             }
-            session.user = student;
-            session.student = new StudentSession(student, catalog, queueManager, enrollmentDao);
         }
         sessions.remove(getToken(ex));                       // forget any older login
         String token = UUID.randomUUID().toString();
@@ -186,7 +207,8 @@ public class Api {
         String cookie = "sid=" + token + "; Path=/; HttpOnly; SameSite=Strict";
         if (System.getenv("RENDER") != null) cookie += "; Secure";
         ex.getResponseHeaders().add("Set-Cookie", cookie);
-        return ok("role", session.student == null ? "admin" : "student", "name", session.user.getName());
+        String role = session.user instanceof Admin ? "admin" : (session.user instanceof Staff ? "staff" : "student");
+        return ok("role", role, "position", session.user instanceof Staff ? session.user.getExtra() : "", "name", session.user.getName());
     }
 
     private Map<String, Object> logout(HttpExchange ex) {
@@ -198,22 +220,34 @@ public class Api {
     private Map<String, Object> register(Map<String, String> p) {
         String name = param(p, "name").trim();
         String email = param(p, "email").trim();
-        String type = param(p, "type");
+        String type = param(p, "type").trim();
         String password = param(p, "password");
+        String programId = param(p, "programId").trim();
+        String previousSchool = param(p, "previousSchool").trim();
+        String previousProgram = param(p, "previousProgram").trim();
         if (Validator.isBlank(name) || !Validator.isValidEmail(email) || !Validator.isValidPassword(password)) {
             return fail("Enter your name, a valid email, and a password of at least 6 characters.");
         }
-        if (accountDao.studentEmailExists(email)) {
-            return fail("That email is already registered.");
+        if ("Continuing Student".equals(type)) {
+            return fail("Continuing-student registration is temporarily unavailable until the registrar provides an official Student ID masterlist. Existing students can still log in with their current ID.");
         }
-        if (!Arrays.asList(SiteContent.STUDENT_TYPES).contains(type)) {
-            type = SiteContent.STUDENT_TYPES[0];
+        if (!"New Student".equals(type) && !"Transferee".equals(type)) return fail("Choose a valid student classification.");
+        if (accountDao.studentEmailExists(email)) return fail("That email is already registered.");
+        if ("New Student".equals(type) && !academicDao.programExists(programId)) return fail("Choose a valid program.");
+        if ("Transferee".equals(type) && (previousSchool.isEmpty() || previousProgram.isEmpty())) {
+            return fail("Enter your previous school and previous program for academic evaluation.");
         }
         String newId = accountDao.nextStudentId();
-        if (!accountDao.add(new Student(newId, name, email, type, password))) {
-            return fail("Could not create the account.");
+        if (!accountDao.add(new Student(newId, name, email, type, password))) return fail("Could not create the account.");
+        String status = "New Student".equals(type) ? "REQUIREMENTS_PENDING" : "ACADEMIC_EVALUATION";
+        if (!profileDao.create(newId, type, status, programId, previousSchool, previousProgram)) {
+            accountDao.delete(newId);
+            return fail("Could not create the student application. Please try again.");
         }
-        return ok("message", "Account created! Your Student ID is " + newId + ". You can now log in.");
+        String process = "New Student".equals(type)
+                ? "Please log in and submit your required documents. Enrollment opens after registrar approval."
+                : "Your transferee application is awaiting academic evaluation. Please log in and submit your available documents.";
+        return ok("message", "Account created! Your Student ID is " + newId + ". " + process);
     }
 
     private Map<String, Object> contact(Map<String, String> p) {
@@ -238,11 +272,11 @@ public class Api {
             if (category.isEmpty() || category.equals("all") || category.equals(item.getCategory())) {
                 String description = item.getDescription();
                 // Keep the public demo descriptions aligned with the features that are implemented.
-                if (item.getTitle().equals("Credential Upload")) description = "Credential uploads are not available in this academic demo.";
-                else if (item.getTitle().equals("Credential Verification")) description = "Staff document review and approval are not implemented in this demo.";
+                if (item.getTitle().equals("Credential Upload")) description = "Students can submit PDF, PNG, and JPEG enrollment requirements up to 2 MB.";
+                else if (item.getTitle().equals("Credential Verification")) description = "Registrar staff can review submitted documents, update verification status, and leave remarks.";
                 else if (item.getTitle().equals("Schedule Checking")) description = "View sample schedules. Conflicting subjects are flagged before submission.";
                 else if (item.getTitle().equals("Prerequisite Locking")) description = "The demo illustrates prerequisite locking using the seeded failed-subject example.";
-                else if (item.getTitle().equals("Subject and Section Management")) description = "The admin page manages student and staff accounts. Subject and section editing is not included in this demo.";
+                else if (item.getTitle().equals("Subject and Section Management")) description = "Administrators can add academic programs, curricula, subjects, and section offerings with lecture/laboratory units and capacity limits.";
                 else if (item.getTitle().equals("Payment Queue Number")) description = "Submitting enrollment saves a slip and generates a demo queue number. Email alerts and online payment are not included.";
                 list.add(Json.map("title", item.getTitle(), "description", description,
                                   "category", item.getCategory()));
@@ -281,11 +315,13 @@ public class Api {
     // =====================================================================
 
     private Map<String, Object> studentRoute(String key, Map<String, String> p, StudentSession s) {
+        s.refreshAfterRejection();
         switch (key) {
+            case "GET /api/application/status": return ok("application", profileDao.get(s.getStudent().getId()));
             case "GET /api/subjects": return subjects(s, p);
             case "GET /api/subjects/search": return searchSubject(s, param(p, "code"));
-            case "POST /api/select": return change(s, s.select(param(p, "code")), "added");
-            case "POST /api/remove": return change(s, s.remove(param(p, "code")), "removed");
+            case "POST /api/select": return change(s, s.select(param(p, "offeringId")), "added");
+            case "POST /api/remove": return change(s, s.remove(param(p, "offeringId")), "removed");
             case "GET /api/selected": return selected(s);
             case "POST /api/submit": return submit(s);
             case "GET /api/queue": return queue(s);
@@ -298,24 +334,10 @@ public class Api {
     }
 
     private Map<String, Object> subjects(StudentSession s, Map<String, String> p) {
-        String sortBy = param(p, "sort");
-        ArrayList<Subject> list;
-        String algorithm = "";
-        int comparisons = 0;
-        if (sortBy.isEmpty()) {
-            list = catalog.inOrder();                          // Tree: in-order traversal
-        } else {
-            Comparator<Subject> comparator = SubjectComparators.BY_CODE;
-            if (sortBy.equals("title")) comparator = SubjectComparators.BY_TITLE;
-            if (sortBy.equals("units")) comparator = SubjectComparators.BY_UNITS;
-            if (sortBy.equals("schedule")) comparator = SubjectComparators.BY_SCHEDULE;
-            int choice = Math.max(1, Math.min(4, toInt(p.get("algo"), 4)));
-            Subject[] array = catalog.getAll().toArray(new Subject[0]);   // sorting works on an array
-            SortUtil.sort(array, comparator, choice);
-            list = new ArrayList<Subject>(Arrays.asList(array));
-            algorithm = SortUtil.ALGORITHM_NAMES[choice - 1];
-            comparisons = SortUtil.getComparisons();
-        }
+        Map<String, Object> profile = profileDao.get(s.getStudent().getId());
+        String programId = String.valueOf(profile.get("programId"));
+        String curriculumId = String.valueOf(profile.get("curriculumId"));
+        ArrayList<Subject> list = catalog.getOfferings(programId, curriculumId);
         List<Object> rows = new ArrayList<Object>();
         for (Subject sub : list) {
             rows.add(subjectMap(s, sub));
@@ -326,21 +348,28 @@ public class Api {
                    + ". Subjects that require it are locked, and it is offered for retake.";
         }
         return ok("subjects", rows, "notice", notice, "maxUnits", SiteContent.MAX_UNITS, "units", s.getUnits(),
-                  "submitted", s.getTicket() != null, "algorithm", algorithm, "comparisons", comparisons,
-                  "term", SiteContent.TERM + " | " + SiteContent.PROGRAM);
+                  "submitted", s.getTicket() != null, "programId", programId, "curriculumId", curriculumId,
+                  "term", SiteContent.TERM + " | " + academicDao.getAcademicLabel(programId, curriculumId));
     }
 
     private Map<String, Object> subjectMap(StudentSession s, Subject sub) {
-        return Json.map("code", sub.getCode(), "title", sub.getTitle(), "units", sub.getUnits(),
-                        "section", sub.getSection(), "schedule", sub.getSchedule().toString(),
-                        "slots", sub.getSlots(), "status", s.statusOf(sub));
+        String schedule = sub.getLectureSchedule() == null ? "" : "LEC " + sub.getLectureSchedule().toString();
+        if (sub.getLabSchedule() != null) schedule += (schedule.isEmpty() ? "" : " | ") + "LAB " + sub.getLabSchedule().toString();
+        String sectionStatus = sub.isFull() ? "Full" : (sub.isBelowMinimum() ? "Below minimum" : (sub.getMinimumStudents() > 0 ? "Minimum reached" : "Open"));
+        return Json.map("offeringId", sub.getOfferingId(), "code", sub.getCode(), "title", sub.getTitle(),
+                        "units", sub.getUnits(), "lectureUnits", sub.getLectureUnits(), "labUnits", sub.getLabUnits(),
+                        "section", sub.getSection(), "schedule", schedule,
+                        "minimumStudents", sub.getMinimumStudents(), "maximumStudents", sub.getMaximumStudents(),
+                        "enrolledStudents", sub.getEnrolledStudents(), "slots", sub.getSlots(),
+                        "sectionStatus", sectionStatus, "status", s.statusOf(sub));
     }
 
     private Map<String, Object> searchSubject(StudentSession s, String code) {
-        Subject sub = catalog.find(code);                      // Binary Search Tree lookup
-        if (sub == null) {
-            return fail("Subject not found.");
-        }
+        Map<String, Object> profile = profileDao.get(s.getStudent().getId());
+        ArrayList<Subject> offerings = catalog.getOfferings(String.valueOf(profile.get("programId")), String.valueOf(profile.get("curriculumId")));
+        Subject sub = null;
+        for (Subject offering : offerings) if (offering.getCode().equalsIgnoreCase(code.trim())) { sub = offering; break; }
+        if (sub == null) return fail("Subject not found in your assigned curriculum.");
         return ok("subject", subjectMap(s, sub), "prerequisites", catalog.getGraph().getAllPrerequisites(sub.getCode()));
     }
 
@@ -404,8 +433,11 @@ public class Api {
         for (EnrollmentSlip slip : s.getSavedSlips()) {
             List<Object> subs = new ArrayList<Object>();
             for (Subject sub : slip.getSubjects()) {
+                String schedule = sub.getLectureSchedule() == null ? "" : "LEC " + sub.getLectureSchedule().toString();
+                if (sub.getLabSchedule() != null) schedule += (schedule.isEmpty() ? "" : " | ") + "LAB " + sub.getLabSchedule().toString();
                 subs.add(Json.map("code", sub.getCode(), "title", sub.getTitle(), "units", sub.getUnits(),
-                                  "schedule", sub.getSchedule().toString()));
+                                  "lectureUnits", sub.getLectureUnits(), "labUnits", sub.getLabUnits(),
+                                  "section", sub.getSection(), "schedule", schedule));
             }
             list.add(Json.map("submittedAt", slip.getSubmittedAt(), "queueNumber", slip.getQueueNumber(),
                               "totalUnits", slip.getTotalUnits(), "status", slip.getStatus(),
@@ -431,11 +463,67 @@ public class Api {
             case "GET /api/admin/credentials": return adminCredentials();
             case "GET /api/admin/credentials/file": return credentialFile(p);
             case "POST /api/admin/credentials/review": return reviewCredential(p);
+            case "GET /api/admin/applications": return ok("applications", profileDao.getApplications());
+            case "POST /api/admin/application/review": return reviewApplication(p);
+            case "GET /api/admin/academic/programs": return ok("programs", academicDao.getPrograms());
+            case "POST /api/admin/academic/program": return addProgram(p);
+            case "GET /api/admin/academic/curricula": return ok("curricula", academicDao.getCurricula(param(p, "programId")));
+            case "POST /api/admin/academic/curriculum": return addCurriculum(p);
+            case "GET /api/admin/academic/subjects": return ok("subjects", academicDao.getSubjectCatalog());
+            case "POST /api/admin/academic/subject": return addAcademicSubject(p);
+            case "GET /api/admin/academic/sections": return ok("sections", academicDao.getSections());
+            case "POST /api/admin/academic/section": return addAcademicSection(p);
+            case "POST /api/admin/academic/section/capacity": return updateAcademicSectionCapacity(p);
             default:
                 Map<String, Object> notFound = fail("Unknown address: " + key);
                 notFound.put("_status", 404);
                 return notFound;
         }
+    }
+
+    private Map<String, Object> staffRoute(String key, Map<String, String> p, Staff staff) {
+        String position = staff.getExtra();
+        boolean registrar = "Registrar".equals(position) || "Administrator".equals(position);
+        boolean clerk = "Clerk".equals(position);
+        boolean cashier = "Cashier".equals(position) || "Administrator".equals(position);
+        if ("GET /api/staff/me".equals(key)) return ok("name", staff.getName(), "position", position);
+        if ("GET /api/staff/queue".equals(key) || "POST /api/staff/queue/next".equals(key)) {
+            if (!cashier) return unauthorized();
+            if ("POST /api/staff/queue/next".equals(key)) queueManager.callNext();
+            Ticket current = queueManager.getNowServing();
+            return ok("nowServing", current == null ? 0 : current.getNumber());
+        }
+        if ("GET /api/staff/applications".equals(key)) {
+            if (!registrar && !clerk) return unauthorized();
+            return ok("applications", profileDao.getApplications());
+        }
+        if ("POST /api/staff/application/review".equals(key)) {
+            if (!registrar) return unauthorized();
+            return reviewApplication(p);
+        }
+        if ("GET /api/staff/enrollments".equals(key)) {
+            if (!registrar && !clerk) return unauthorized();
+            return adminEnrollments();
+        }
+        if ("POST /api/staff/enrollment/review".equals(key)) {
+            if (!registrar) return unauthorized();
+            return updateEnrollmentReview(p);
+        }
+        if ("GET /api/staff/credentials".equals(key)) {
+            if (!registrar && !clerk) return unauthorized();
+            return adminCredentials();
+        }
+        if ("GET /api/staff/credentials/file".equals(key)) {
+            if (!registrar && !clerk) return unauthorized();
+            return credentialFile(p);
+        }
+        if ("POST /api/staff/credentials/review".equals(key)) {
+            if (!registrar) return unauthorized();
+            return reviewCredential(p);
+        }
+        Map<String, Object> missing = fail("Unknown staff address: " + key);
+        missing.put("_status", 404);
+        return missing;
     }
 
     private Map<String, Object> adminEnrollments() {
@@ -512,6 +600,94 @@ public class Api {
         return ok("message", "Credential review updated to " + status + ".");
     }
 
+    private Map<String, Object> reviewApplication(Map<String, String> p) {
+        String studentId = param(p, "studentId").trim();
+        String status = param(p, "status").trim();
+        String programId = param(p, "programId").trim();
+        String curriculumId = param(p, "curriculumId").trim();
+        String notes = param(p, "notes").trim();
+        if (studentId.isEmpty()) return fail("Student ID is required.");
+        if (!Arrays.asList("REQUIREMENTS_PENDING", "ACADEMIC_EVALUATION", "APPROVED", "REJECTED").contains(status)) return fail("Choose a valid application status.");
+        if (notes.length() > 1000) return fail("Remarks must be 1,000 characters or fewer.");
+        if ("APPROVED".equals(status)) {
+            if (!academicDao.programExists(programId) || !academicDao.curriculumBelongsToProgram(curriculumId, programId)) return fail("Assign a valid program and matching curriculum before approval.");
+            if (credentialDao.countVerifiedForStudent(studentId) < 1) return fail("At least one uploaded requirement must be marked Verified before approval. Confirm the complete official checklist manually.");
+        }
+        if (!profileDao.updateReview(studentId, status, programId, curriculumId, notes)) return fail("Could not update the student application.");
+        return ok("message", "Student application updated to " + status + ".");
+    }
+
+    private Map<String, Object> addProgram(Map<String, String> p) {
+        String code = param(p, "code").trim().toUpperCase();
+        String name = param(p, "name").trim();
+        if (code.isEmpty() || name.isEmpty()) return fail("Enter a program code and name.");
+        if (!academicDao.addProgram(code, name)) return fail("Could not add the program. Check that its code is unique.");
+        return ok("message", "Program added.");
+    }
+
+    private Map<String, Object> addCurriculum(Map<String, String> p) {
+        String programId = param(p, "programId").trim();
+        String name = param(p, "name").trim();
+        String year = param(p, "effectiveYear").trim();
+        if (!academicDao.programExists(programId) || name.isEmpty() || year.isEmpty()) return fail("Choose a program and enter a curriculum name and effective year.");
+        if (!academicDao.addCurriculum(programId, name, year)) return fail("Could not add the curriculum.");
+        return ok("message", "Curriculum added.");
+    }
+
+    private Map<String, Object> addAcademicSubject(Map<String, String> p) {
+        String code = param(p, "code").trim().toUpperCase();
+        String title = param(p, "title").trim();
+        String prerequisites = param(p, "prerequisites").trim();
+        if (code.isEmpty() || title.isEmpty()) return fail("Enter a subject code and title.");
+        if (!academicDao.addSubject(code, title, prerequisites)) return fail("Could not add the subject. The subject code may already exist.");
+        catalog.reload();
+        return ok("message", "Subject added to the catalog. Add one or more section offerings next.");
+    }
+
+    private Map<String, Object> updateAcademicSectionCapacity(Map<String, String> p) {
+        String id = param(p, "offeringId").trim();
+        int minimum = toInt(p.get("minimum"), -1);
+        int maximum = toInt(p.get("maximum"), -1);
+        if (id.isEmpty() || minimum < 0 || maximum < 1 || minimum > maximum) return fail("Enter valid minimum and maximum student counts.");
+        if (!academicDao.updateSectionCapacity(id, minimum, maximum)) return fail("Capacity was not updated. Maximum cannot be lower than current enrollment.");
+        return ok("message", "Section minimum and maximum enrollment were updated.");
+    }
+
+    private Map<String, Object> addAcademicSection(Map<String, String> p) {
+        String subjectCode = param(p, "subjectCode").trim().toUpperCase();
+        String section = param(p, "section").trim();
+        String programId = param(p, "programId").trim();
+        String curriculumId = param(p, "curriculumId").trim();
+        int lecUnits = toInt(p.get("lectureUnits"), -1);
+        int labUnits = toInt(p.get("labUnits"), -1);
+        int minimum = toInt(p.get("minimum"), -1);
+        int maximum = toInt(p.get("maximum"), -1);
+        String lecDay = param(p, "lectureDay");
+        int lecStart = toMinutes(param(p, "lectureStart"));
+        int lecEnd = toMinutes(param(p, "lectureEnd"));
+        String labDay = param(p, "labDay");
+        int labStart = toMinutes(param(p, "labStart"));
+        int labEnd = toMinutes(param(p, "labEnd"));
+        if (section.isEmpty() || !academicDao.programExists(programId) || !academicDao.curriculumBelongsToProgram(curriculumId, programId)) return fail("Choose a valid program and matching curriculum, and enter a section name.");
+        if ((lecUnits > 0 && (lecStart < 0 || lecEnd <= lecStart)) || (labUnits > 0 && (labStart < 0 || labEnd <= labStart))) return fail("Enter valid start and end times for each class component with units.");
+        boolean saved = academicDao.addSection(subjectCode, section, programId, curriculumId, lecUnits, labUnits,
+                minimum, maximum, lecDay, lecStart, lecEnd, labDay, labStart, labEnd);
+        if (!saved) return fail("Could not add section. Check the subject, units, minimum/maximum enrollment, and lecture/lab schedules.");
+        catalog.reload();
+        return ok("message", "Section offering added.");
+    }
+
+    private int toMinutes(String value) {
+        if (value == null || value.trim().isEmpty()) return -1;
+        try {
+            String[] parts = value.trim().split(":");
+            if (parts.length != 2) return -1;
+            int h = Integer.parseInt(parts[0]), m = Integer.parseInt(parts[1]);
+            if (h < 0 || h > 23 || (m != 0 && m != 30)) return -1;
+            return h * 60 + m;
+        } catch (RuntimeException e) { return -1; }
+    }
+
     private Map<String, Object> adminAccounts(Map<String, String> p, boolean students) {
         ArrayList<Person> people = accountDao.getByRole(students ? "STUDENT" : "STAFF");
         String sort = param(p, "sort");
@@ -567,6 +743,23 @@ public class Api {
         boolean saved = adding ? accountDao.add(person) : accountDao.update(oldId, person);
         if (!saved) {
             return fail("Could not save the record.");
+        }
+        if (students && adding) {
+            String applicationStatus = "Continuing Student".equals(extra) ? "APPROVED"
+                    : ("Transferee".equals(extra) ? "ACADEMIC_EVALUATION" : "REQUIREMENTS_PENDING");
+            String programId = "BSIT";
+            if (!profileDao.create(id, extra, applicationStatus, programId, "", "")) {
+                accountDao.delete(id);
+                return fail("The account could not be linked to its student application profile.");
+            }
+            if ("Continuing Student".equals(extra)) {
+                profileDao.updateReview(id, "APPROVED", "BSIT", "BSIT-2026", "Added by administrator using the existing registrar record.");
+            }
+        } else if (students) {
+            if (!oldId.equals(id) && !profileDao.renameStudentId(oldId, id)) {
+                return fail("The account ID was updated, but linked enrollment records need administrator review.");
+            }
+            profileDao.updateType(id, extra);
         }
         String what = students ? "User" : "Staff";
         return ok("message", what + " record " + (adding ? "added." : "updated."));
